@@ -1,0 +1,11 @@
+[
+    { 
+        "gateWayPort": 80,
+        "gateWayIpAddress":"104.219.41.232",
+        "randomPassword":"NUJEYW4k8AN69DT1tkYNoD9wVrv"
+    },{ 
+        "gateWayPort": "80",
+        "gateWayIpAddress":"198.251.77.20",
+        "randomPassword":"FT16dnwDZ5UAjflyNcqDaEApU"
+    }
+]

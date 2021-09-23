@@ -1,0 +1,49 @@
+{
+	"name": "@kloak-it/qtgate-server",
+	"version": "0.6.0",
+	"license": "MIT",
+	"description": "iOPN Server/Client",
+	"scripts": {
+		"build": "tsc --project tsconfig.json",
+		"server": "node ./server",
+		"client": "node ./client",
+		"test": "jest",
+		"start": "node cli"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/CoNETProject/iOPN.git"
+	},
+	"author": {
+		"name": "Kloak Information Technologies Inc.",
+		"email": "info@Kloak.io"
+	},
+	"bugs": {
+		"url": "https://github.com/CoNETProject/iOPN/issues"
+	},
+	"homepage": "https://www.Kloak.io",
+	"devDependencies": {
+		"@types/jest": "^27.0.1",
+		"@types/node": "^16.6.2",
+		"jest": "^27.0.6",
+		"supertest": "^6.1.6"
+	},
+	"dependencies": {
+		"async": "^3.2.1",
+		"colors": "^1.4.0",
+		"express": "^4.17.1",
+		"node-uuid": "^1.4.8"
+	},
+	"bin": {
+		"qtgate-server": "./cli.js"
+	},
+	"keywords": [
+		"proxy-server",
+		"shadowsocks",
+		"seguro",
+		"kloak",
+		"nodejs",
+		"typescript",
+		"socks"
+	]
+}
