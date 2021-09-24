@@ -1,8 +1,8 @@
 {
-	"name": "@kloak-it/qtgate-server",
-	"version": "0.6.0",
+	"name": "@kloak-it/tq-proxy",
+	"version": "0.0.2",
 	"license": "MIT",
-	"description": "iOPN Server/Client",
+	"description": "QT PROXY Server/Client",
 	"scripts": {
 		"build": "tsc --project tsconfig.json",
 		"server": "node ./server",
@@ -45,5 +45,14 @@
 		"nodejs",
 		"typescript",
 		"socks"
+	],
+	"files": [
+		"dist",
+		"cli.js",
+		"LICENSE",
+		"README.md",
+		"package.json",
+		"resouce"
 	]
+
 }
