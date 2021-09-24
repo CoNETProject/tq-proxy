@@ -35,7 +35,7 @@
 		"node-uuid": "^1.4.8"
 	},
 	"bin": {
-		"qtgate-server": "./cli.js"
+		"tq-proxy": "./cli.js"
 	},
 	"keywords": [
 		"proxy-server",
