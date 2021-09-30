@@ -3,7 +3,7 @@
 ## Description 概要
 
 TQ Proxy is lightweight and fast Proxy server based on NodeJS. It provide HTTP, HTTPS, SOCKS v4 & v5 proxy.
-TQ have two parts one is the gateway server and proxy server.
+TQ Proxy splits a proxy to two parts, one is the gateway server and proxy server.
 Communication between the two parts is using HTTP protocol to make a virtual tunnel that disguise the traffic looks like normal HTTP protocol, to exchanges packets. Support multiple gateway servers at the same time, which can increase bandwidth and reduce the risk of traffic monitoring.
 
 [Kloak Information Technologies Inc.](https://www.Kloak.app).
