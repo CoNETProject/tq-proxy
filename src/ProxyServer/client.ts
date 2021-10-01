@@ -393,6 +393,7 @@ export class proxyServer {
 	public checkAgainTimeOut = 1000 * 60 * 5
 	public connectHostTimeOut = 1000 * 5
 	public useGatWay = true
+	public clientSockets: Set<Net.Socket> = new Set() 
 	
 	private saveWhiteIpList () {
 		if ( this.whiteIpList.length > 0 )
@@ -448,6 +449,7 @@ export class proxyServer {
 		
 		this.server = Net.createServer ( socket => {
 			const ip = socket.remoteAddress
+			this.clientSockets.add (socket)
 			const isWhiteIp = this.whiteIpList.find ( n => { return n === ip }) ? true : false
 			let agent = 'Mozilla/5.0'
 				//	windows 7 GET PAC User-Agent: Mozilla/5.0 (compatible; IE 11.0; Win32; Trident/7.0)
@@ -487,15 +489,20 @@ export class proxyServer {
 				socks = null
 				//console.log ( `[${ip}] socket.on error`, err.message )
 			})
+
 			socket.once ( 'end', () => {
+				this.clientSockets.delete(socket)
 				socks = null
 			})
+			
 		})
 
 		this.server.on ( 'error', err => {
 			console.log ( 'proxy server :', err )
 			
 		})
+
+		this.server.maxConnections = 65536
 
 		this.server.listen ( proxyPort, () => {
 			return console.log ( 'proxy start success on port :', proxyPort  )
@@ -523,6 +530,18 @@ export class proxyServer {
 		}
 		this.multipleGateway [ index ] = data
 		return this.gateway = new gateWay ( this.multipleGateway )
+	}
+
+	public close ( Callback ) {
+		this.clientSockets.forEach ( n => {
+			if ( typeof n.end === 'function') {
+				n.end()
+			}
+		})
+		if ( typeof this.server.close ==='function'){
+			return this.server.close(Callback)
+		}
+		return Callback()
 	}
 
 }

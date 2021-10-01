@@ -334,6 +334,7 @@ class proxyServer {
         this.checkAgainTimeOut = 1000 * 60 * 5;
         this.connectHostTimeOut = 1000 * 5;
         this.useGatWay = true;
+        this.clientSockets = new Set();
         this.getGlobalIp = (gateWay) => {
             if (this.getGlobalIpRunning) {
                 return console.log(`getGlobalIp getGlobalIpRunning === true!, skip!`);
@@ -364,6 +365,7 @@ class proxyServer {
         let socks = null;
         this.server = Net.createServer(socket => {
             const ip = socket.remoteAddress;
+            this.clientSockets.add(socket);
             const isWhiteIp = this.whiteIpList.find(n => { return n === ip; }) ? true : false;
             let agent = 'Mozilla/5.0';
             //	windows 7 GET PAC User-Agent: Mozilla/5.0 (compatible; IE 11.0; Win32; Trident/7.0)
@@ -395,12 +397,14 @@ class proxyServer {
                 //console.log ( `[${ip}] socket.on error`, err.message )
             });
             socket.once('end', () => {
+                this.clientSockets.delete(socket);
                 socks = null;
             });
         });
         this.server.on('error', err => {
             console.log('proxy server :', err);
         });
+        this.server.maxConnections = 65536;
         this.server.listen(proxyPort, () => {
             return console.log('proxy start success on port :', proxyPort);
         });
@@ -428,6 +432,17 @@ class proxyServer {
         }
         this.multipleGateway[index] = data;
         return this.gateway = new gateway_1.default(this.multipleGateway);
+    }
+    close(Callback) {
+        this.clientSockets.forEach(n => {
+            if (typeof n.end === 'function') {
+                n.end();
+            }
+        });
+        if (typeof this.server.close === 'function') {
+            return this.server.close(Callback);
+        }
+        return Callback();
     }
 }
 exports.proxyServer = proxyServer;

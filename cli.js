@@ -13,6 +13,7 @@ const makeWork = () => {
 };
 
 const util_1 = require ( "util" );
+const { logger } = require("./dist/GateWay/log");
 const [,,...args] = process.argv;
 const setup = require ('./package.json')
 
@@ -92,6 +93,12 @@ if ( args[0] === '-p' ) {
     }
    
     const proxyServer = require ('./dist/ProxyServer/client');
-    new proxyServer.proxyServer ( args[2], gateway );
+    const server = new proxyServer.proxyServer ( args[2], gateway );
+    setTimeout (() => {
+        logger(`Doing close now!`);
+        server.close (()=> {
+            logger(`proxy close!`);
+        })
+    }, 1000 * 15)
 		
 }

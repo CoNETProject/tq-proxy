@@ -200,6 +200,7 @@ class ssModeV1 {
         serverNet.on('error', err => {
             return (0, log_1.logger)('ssModeV1 serverNet.on error:' + err.message);
         });
+        serverNet.maxConnections = 12800;
         return serverNet.listen(portNumber, null, 2048, () => {
             const log = `SS mode start up listening on [${portNumber}]`;
             return (0, log_1.logger)(log);
