@@ -103,8 +103,9 @@ class Requests {
         return this.buffer.readUInt8(4);
     }
     get domainName() {
-        if (this.ATYP !== exports.ATYP.DOMAINNAME)
+        if (this.ATYP !== exports.ATYP.DOMAINNAME) {
             return null;
+        }
         return this.buffer.toString('utf8', 5, 5 + this.domainLength);
     }
     get ATYP() {

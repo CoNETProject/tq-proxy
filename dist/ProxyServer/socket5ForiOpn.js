@@ -40,6 +40,7 @@ const res = __importStar(require("./res"));
 const Crypto = __importStar(require("crypto"));
 const client_1 = require("./client");
 const Util = __importStar(require("util"));
+const log_1 = require("../GateWay/log");
 //	socks 5 headers
 const server_res = {
     NO_AUTHENTICATION_REQUIRED: Buffer.from('0500', 'hex')
@@ -57,6 +58,7 @@ class socks5 {
         this.ATYP = null;
         this.port = null;
         this.cmd = null;
+        this._cmd = '';
         this.targetIpV4 = null;
         this.targetDomainData = null;
         this.keep = false;
@@ -164,35 +166,43 @@ class socks5 {
         this.targetIpV4 = req.ATYP_IP4Address;
         //.serverIP = this.socket.localAddress.split (':')[3]
         //		IPv6 not support!
+        const obj = { ATYP: this.ATYP, host: this.host, hostType: typeof this.host, port: this.port, targetIpV4: this.targetIpV4, cmd: this._cmd, buffer: data.toString('hex') };
         switch (this.cmd) {
             case Rfc1928.CMD.CONNECT: {
-                //console.log (`sock5 [${ this.host }]`)
                 this.keep = true;
+                this._cmd = obj.cmd = 'CONNECT';
                 break;
             }
             case Rfc1928.CMD.BIND: {
-                console.log(`Rfc1928.CMD.BIND request data[${data.toString('hex')}]`);
+                this._cmd = obj.cmd = 'CONNECT';
                 break;
             }
             case Rfc1928.CMD.UDP_ASSOCIATE: {
                 this.keep = true;
-                console.log(`Rfc1928.CMD.UDP_ASSOCIATE data[${data.toString('hex')}]`);
+                this._cmd = obj.cmd = 'CONNECT';
+                //logger( `Rfc1928.CMD.UDP_ASSOCIATE data[${ data.toString ('hex')}]` )
                 break;
             }
-            default:
+            default: {
+                this._cmd = obj.cmd = 'UNKNOW';
+                (0, log_1.logger)(`Socks 5 unknow cmd: `, data.toString('hex'), Util.inspect(req, false, 3, true));
                 break;
+            }
         }
         //			IPv6 not support 
         if (req.IPv6) {
             this.keep = false;
         }
         if (!this.keep) {
+            (0, log_1.logger)(``);
             req.REP = Rfc1928.Replies.COMMAND_NOT_SUPPORTED_or_PROTOCOL_ERROR;
+            (0, log_1.logger)('close socks 5 connect', obj);
             return this.closeSocks5(req.buffer);
         }
         if (this.cmd === Rfc1928.CMD.UDP_ASSOCIATE) {
-            return console.log('this.cmd === Rfc1928.CMD.UDP_ASSOCIATE skip!');
+            return (0, log_1.logger)('this.cmd === Rfc1928.CMD.UDP_ASSOCIATE skip!');
         }
+        (0, log_1.logger)('keep sock5 connect', obj);
         return this.connectStat2_after(req);
     }
 }
@@ -207,6 +217,7 @@ class sockt4 {
         this.host = this.req.domainName;
         this.port = this.req.port;
         this.cmd = this.req.cmd;
+        this._cmd = '';
         this.targetIpV4 = this.req.targetIp;
         this.targetDomainData = null;
         this.clientIP = this.socket;
@@ -215,20 +226,25 @@ class sockt4 {
         switch (this.cmd) {
             case Rfc1928.CMD.CONNECT: {
                 this.keep = true;
+                this._cmd = 'CONNECT';
                 break;
             }
             case Rfc1928.CMD.BIND: {
                 console.log('establish a TCP/IP port binding');
                 console.log(this.req.buffer.toString('hex'));
+                this._cmd = 'BIND';
                 break;
             }
             case Rfc1928.CMD.UDP_ASSOCIATE: {
                 console.log('associate a UDP port');
                 console.log(this.req.buffer.toString('hex'));
+                this._cmd = 'UDP_ASSOCIATE';
                 break;
             }
-            default:
+            default: {
+                this._cmd = 'UNKNOW';
                 break;
+            }
         }
         if (!this.keep) {
             this.socket.end(this.req.request_failed);

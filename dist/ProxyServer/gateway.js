@@ -39,6 +39,7 @@ const Net = __importStar(require("net"));
 const res = __importStar(require("./res"));
 const Stream = __importStar(require("stream"));
 const Crypto = __importStar(require("crypto"));
+const log_1 = require("../GateWay/log");
 const Day = 1000 * 60 * 60 * 24;
 const otherRequestForNet = (path, host, port, UserAgent) => {
     if (path.length < 1024 + Math.round(Math.random() * 4000))
@@ -105,8 +106,9 @@ class gateWay {
         const finish = new hostLookupResponse(CallBack);
         const httpBlock = new Compress.getDecryptClientStreamFromHttp();
         const decrypt = new Compress.decryptStream(gateway.randomPassword);
-        console.log(`try connect server: [${gateway.gateWayIpAddress}:${gateway.gateWayPort}] password[${gateway.randomPassword}]`);
+        (0, log_1.logger)(`try connect gateway server: [${gateway.gateWayIpAddress}:${gateway.gateWayPort}] password[${gateway.randomPassword}]`);
         const _socket = Net.createConnection(gateway.gateWayPort, gateway.gateWayIpAddress, () => {
+            (0, log_1.logger)(`connected Gateway [${gateway.gateWayIpAddress}] doing encrypt.write ( _data )`);
             encrypt.write(_data);
         });
         _socket.once('end', () => {
@@ -116,7 +118,7 @@ class gateWay {
             return CallBack(err);
         });
         httpBlock.once('error', err => {
-            console.log(`httpBlock.on error`, err);
+            (0, log_1.logger)(`hostLookup httpBlock.on error`, err);
             _socket.end(res._HTTP_502);
             return CallBack(err);
         });

@@ -193,7 +193,8 @@ const _connect = ( hostname: string, hostIp: string, port: number, clientSocket:
 
 export const tryConnectHost = ( hostname: string, hostIp: domainData, port: number, data: Buffer, clientSocket: Net.Socket, isSSLConnect: boolean, 
 	checkAgainTimeOut: number, connectTimeOut: number, gateway: boolean, CallBack ) => {
-
+		const obj = { hostname, hostIp, port, isSSLConnect}
+		logger (`tryConnectHost`, obj )
 	if ( isSSLConnect ) {
 		clientSocket.once ( 'data', ( _data: Buffer ) => {
 			return tryConnectHost ( hostname, hostIp, port, _data, clientSocket, false, checkAgainTimeOut, connectTimeOut, gateway, CallBack )
@@ -202,6 +203,7 @@ export const tryConnectHost = ( hostname: string, hostIp: domainData, port: numb
 	}
 
 	if ( gateway || ! hostIp ) {
+		logger (` gateway || ! hostIp = true , STOP!`, obj)
 		return CallBack ( new Error ( 'useGateWay!'), data )
 	}
 
@@ -410,11 +412,11 @@ export class proxyServer {
 		}
 			
 		this.getGlobalIpRunning = true
-		saveLog ( `doing getGlobalIp!`)
-		gateWay.hostLookup ( testGatewayDomainName, null, ( err, data ) => {
+		logger ( `doing getGlobalIp!`)
+		return gateWay.hostLookup ( testGatewayDomainName, null, ( err, data ) => {
 			this.getGlobalIpRunning = false
 			if ( err ) {
-				return console.log ( 'getGlobalIp ERROR:', err.message )
+				return logger ( 'getGlobalIp ERROR:', err.message )
 			}
 				
 			//console.log ( Util.inspect ( data ))
@@ -477,9 +479,10 @@ export class proxyServer {
 					case 0x4:
 						return socks = new Socks.sockt4 ( socket, data, agent, this )
 					case 0x5:
+						logger (`socket.once 0x05`, colors.blue(data.toString('hex')))
 						return socks = new Socks.socks5 ( socket, agent, this )
 					default:
-						
+						logger ( ' data.readUInt8 ( 0 ) = ', colors.blue( data.readUInt8 ( 0 ).toString(16)))
 						return httpProxy ( socket, data, this.useGatWay, this.hostGlobalIpV6 ? true : false, this.connectHostTimeOut, this.domainListPool, this.gateway,
 							this.checkAgainTimeOut, this.domainBlackList )
 				}

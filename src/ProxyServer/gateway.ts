@@ -19,6 +19,7 @@ import * as Net from 'net'
 import * as res from './res'
 import * as Stream from 'stream'
 import * as Crypto from 'crypto'
+import { logger } from '../GateWay/log'
 
 const Day = 1000 * 60 * 60 * 24
 
@@ -95,20 +96,23 @@ export default class gateWay {
 		const httpBlock = new Compress.getDecryptClientStreamFromHttp ()
 		const decrypt = new Compress.decryptStream ( gateway.randomPassword )
 		
-		console.log (`try connect server: [${ gateway.gateWayIpAddress }:${ gateway.gateWayPort }] password[${ gateway.randomPassword }]`)
+		logger (`try connect gateway server: [${ gateway.gateWayIpAddress }:${ gateway.gateWayPort }] password[${ gateway.randomPassword }]`)
+
 		const _socket = Net.createConnection ( gateway.gateWayPort, gateway.gateWayIpAddress, () => {
+			logger (`connected Gateway [${ gateway.gateWayIpAddress }] doing encrypt.write ( _data )`)
 			encrypt.write ( _data )
 		})
 
 		_socket.once ( 'end', () => {
 			//console.log ( `_socket.once end!` )
 		})
+
 		_socket.once ('error', err => {
 			return CallBack ( err )
 		})
 
 		httpBlock.once ( 'error', err => {
-			console.log (`httpBlock.on error`, err )
+			logger (`hostLookup httpBlock.on error`, err )
 			_socket.end ( res._HTTP_502 )
 			return CallBack ( err )
 		})
@@ -116,6 +120,7 @@ export default class gateWay {
 		decrypt.once ( 'err', err => {
 			CallBack ( err )
 		})
+
 		encrypt.pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( finish )
 
 	}

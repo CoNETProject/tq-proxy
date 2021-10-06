@@ -106,9 +106,10 @@
 						 return this.buffer.readUInt8 ( 4 )
 					 }
 					 public get domainName () {
-						 if ( this.ATYP !== ATYP.DOMAINNAME )
-							 return null
-						 return this.buffer.toString ( 'utf8', 5, 5 + this.domainLength )
+						if ( this.ATYP !== ATYP.DOMAINNAME ) {
+							return null
+						}
+						return this.buffer.toString ( 'utf8', 5, 5 + this.domainLength )
 					 }
 					 public get ATYP () {
 						 return this.buffer.readInt8 ( 3 )

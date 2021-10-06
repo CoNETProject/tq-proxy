@@ -177,6 +177,8 @@ const _connect = (hostname, hostIp, port, clientSocket, data, connectHostTimeOut
     return socket.connect(port, hostIp);
 };
 const tryConnectHost = (hostname, hostIp, port, data, clientSocket, isSSLConnect, checkAgainTimeOut, connectTimeOut, gateway, CallBack) => {
+    const obj = { hostname, hostIp, port, isSSLConnect };
+    (0, log_1.logger)(`tryConnectHost`, obj);
     if (isSSLConnect) {
         clientSocket.once('data', (_data) => {
             return (0, exports.tryConnectHost)(hostname, hostIp, port, _data, clientSocket, false, checkAgainTimeOut, connectTimeOut, gateway, CallBack);
@@ -184,6 +186,7 @@ const tryConnectHost = (hostname, hostIp, port, data, clientSocket, isSSLConnect
         return closeClientSocket(clientSocket, -200, '');
     }
     if (gateway || !hostIp) {
+        (0, log_1.logger)(` gateway || ! hostIp = true , STOP!`, obj);
         return CallBack(new Error('useGateWay!'), data);
     }
     const now = new Date().getTime();
@@ -340,11 +343,11 @@ class proxyServer {
                 return console.log(`getGlobalIp getGlobalIpRunning === true!, skip!`);
             }
             this.getGlobalIpRunning = true;
-            saveLog(`doing getGlobalIp!`);
-            gateWay.hostLookup(testGatewayDomainName, null, (err, data) => {
+            (0, log_1.logger)(`doing getGlobalIp!`);
+            return gateWay.hostLookup(testGatewayDomainName, null, (err, data) => {
                 this.getGlobalIpRunning = false;
                 if (err) {
-                    return console.log('getGlobalIp ERROR:', err.message);
+                    return (0, log_1.logger)('getGlobalIp ERROR:', err.message);
                 }
                 //console.log ( Util.inspect ( data ))
                 this.hostLocalIpv6 ? console.log(`LocalIpv6[ ${this.hostLocalIpv6} ]`) : null;
@@ -387,8 +390,10 @@ class proxyServer {
                     case 0x4:
                         return socks = new Socks.sockt4(socket, data, agent, this);
                     case 0x5:
+                        (0, log_1.logger)(`socket.once 0x05`, safe_1.default.blue(data.toString('hex')));
                         return socks = new Socks.socks5(socket, agent, this);
                     default:
+                        (0, log_1.logger)(' data.readUInt8 ( 0 ) = ', safe_1.default.blue(data.readUInt8(0).toString(16)));
                         return httpProxy(socket, data, this.useGatWay, this.hostGlobalIpV6 ? true : false, this.connectHostTimeOut, this.domainListPool, this.gateway, this.checkAgainTimeOut, this.domainBlackList);
                 }
             });
