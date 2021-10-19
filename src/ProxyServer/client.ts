@@ -201,48 +201,7 @@ export const tryConnectHost = ( hostname: string, hostIp: domainData, port: numb
 		})
 		return closeClientSocket ( clientSocket, -200, '' )
 	}
-
-	if ( gateway || ! hostIp ) {
-		logger (` gateway || ! hostIp = true , STOP!`, obj)
-		return CallBack ( new Error ( 'useGateWay!'), data )
-	}
-
-	const now = new Date ().getTime ()
-
-	Async.someSeries ( hostIp.dns, ( n, next ) => {
-		//console.log ( n )
-
-		if ( n.family === 6 && ! hostGlobalIpV6 ) {
-			return next ( null, false )
-		}
-			
-		if ( n.connect && n.connect.length ) {
-			const last = n.connect [0]
-			if ( now - last < ipConnectResetTime ) {
-				console.log ( n.address, ' cant connect in time range!')
-				return next ( null, false )
-			}
-		}
-
-		return _connect ( hostname, n.address, port, clientSocket, data, connectTimeOut, err => {
-
-			if ( err ) {
-				console.log ( '_connect callback error', err.message )
-				if ( ! n.connect )
-					n.connect = []
-				n.connect.unshift ( new Date().getTime() )
-				
-				return next ( null, false )
-			}
-				
-			return next ( null, true )
-			
-		})
-	}, ( err, fin ) => {
-		if ( fin )
-			return CallBack ()
-		return CallBack ( new Error ( 'all ip cant direct connect' ), data )
-	})
+	return CallBack (new Error('skip'))
 	
 }
 
@@ -320,25 +279,6 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, useGatWay: boolean
 		const port = parseInt ( httpHead.Url.port ||  httpHead.isHttps ? '443' : '80' )
 		const isIp = Net.isIP ( hostName )
 		const hostIp: domainData = ! isIp ? domainListPool.get ( hostName ) : { dns: [{ family: isIp, address: hostName, expire: null, connect: [] }], expire: null }
-        
-        if ( ! hostIp && ! useGatWay ) {
-
-			return isAllBlackedByFireWall ( hostName,  ip6, _gatway, userAgent, domainListPool, ( err, _hostIp ) => {
-				if ( err ) {
-					console.log ( `[${ hostName }] Blocked!`)
-					return closeClientSocket ( clientSocket, 504, null )
-				}
-
-				if ( ! _hostIp ) {
-					console.log ( 'isAllBlackedByFireWall back no _hostIp' )
-					return CallBack ( new Error ( 'have not host info' ))
-				}
-
-				domainListPool.set ( hostName, _hostIp )
-
-				return tryConnectHost ( hostName, _hostIp, port, buffer, clientSocket, httpHead.isConnect, checkAgainTime, connectTimeOut, useGatWay, CallBack )
-			})
-		}
 
 		return tryConnectHost ( hostName, hostIp, port, buffer, clientSocket, httpHead.isConnect, checkAgainTime, connectTimeOut, useGatWay, CallBack )
 
