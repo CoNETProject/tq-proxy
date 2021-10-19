@@ -20,6 +20,7 @@ import * as res from './res'
 import * as Stream from 'stream'
 import * as Crypto from 'crypto'
 import { logger } from '../GateWay/log'
+import colors from 'colors/safe'
 
 const Day = 1000 * 60 * 60 * 24
 
@@ -162,7 +163,7 @@ export default class gateWay {
 			socket.end ( res._HTTP_404 )
 		})
 
-
+		logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}] for [${ colors.green(uuuu.host)}]`))
 		const _socket = Net.createConnection ( gateway.gateWayPort || 80, gateway.gateWayIpAddress, () => {
 			if ( encrypt && encrypt.writable ) {
 				return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ))
