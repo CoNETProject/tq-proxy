@@ -23,6 +23,7 @@ import * as Compress from './compress'
 import * as StreamFun from './streamFunction'
 import { writeFile } from 'fs'
 import { logger } from './log'
+import colors from 'colors/safe'
 const MaxAllowedTimeOut = 1000 * 60 * 60
 const blockHostFIleName = './blockHost.json'
 import { inspect } from 'util'
@@ -129,13 +130,12 @@ export class ssModeV1 {
             const remoteAddress = _remoteAddress?.split ( ':' ).length > 2 ? _remoteAddress.split ( ':' )[3] : _remoteAddress
 
 			const id = `[${ remoteAddress }]:[${ socket.remotePort }]`
-			logger (`Client ${ id } connect to server!`)
+			logger ( `Client ${ id } connect to server!`)
 
 			serverNet.getConnections (( err, count ) => {
 				if ( err ) {
 					return logger (`serverNet.getConnections [${ id }] [${ portNumber }] ERROR: `, err )
 				}
-					
 				return logger (`new ssMode connect [${ id }:${ portNumber }] opened connect=[${ count }]`)
 			})
 			
@@ -167,7 +167,7 @@ export class ssModeV1 {
             	const firstConnect = new FirstConnect ( socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
 
                 firstConnect.once ( 'error', err => {
-                    logger ( `[${ streamFunBlock.part0 }]firstConnect.on ERROR:`, err.message)
+                    logger ( colors.magenta(`[${ streamFunBlock.part0 }]firstConnect.on ERROR: ${err.message}`))
                     return socket.end ( return404 ())
 				})
 				
@@ -301,7 +301,7 @@ class FirstConnect extends Stream.Writable {
 			if ( data.uuid ) {
 				this.decrypt.id += `[${ data.host }:${ data.port }]`
 				const hostMatch = data.host + ':' + data.port
-				console.log ( `data.uuid = [${ data.uuid }] target: [${ hostMatch }]`)
+				console.log ( colors.blue(`data.uuid = [${ data.uuid }] target: [${ colors.green( hostMatch )}] ssl[${colors.green( data.ssl )}]`))
 
 				let hostCount = this.hostCount.get ( hostMatch ) || 0
 				this.hostCount.set ( hostMatch, ++ hostCount )
@@ -336,7 +336,6 @@ class FirstConnect extends Stream.Writable {
 
 				this.socket = Net.connect ({ port: data.port, host: data.host }, () => {
 
-					
 					this.socket.pipe ( this.encrypt ).pipe ( this.clientSocket )
 					
 					this.socket.write ( Buffer.from ( data.buffer, 'base64' ))
