@@ -1,6 +1,6 @@
 {
 	"name": "@kloak-it/tq-proxy",
-	"version": "0.0.19",
+	"version": "0.0.21",
 	"license": "MIT",
 	"description": "QT PROXY Server/Client",
 	"scripts": {
@@ -32,6 +32,7 @@
 		"async": "^3.2.1",
 		"colors": "^1.4.0",
 		"express": "^4.17.1",
+		"hexdump-nodejs": "^0.1.0",
 		"node-uuid": "^1.4.8"
 	},
 	"bin": {
@@ -54,5 +55,4 @@
 		"package.json"
 	],
 	"main": "dist/index.js"
-
 }
