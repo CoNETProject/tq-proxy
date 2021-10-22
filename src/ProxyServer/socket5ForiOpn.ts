@@ -18,7 +18,7 @@ import * as Net from 'net'
 import * as Rfc1928 from './rfc1928'
 import * as res from './res'
 import * as Crypto from 'crypto'
-import { tryConnectHost, checkDomainInBlackList, isAllBlackedByFireWall } from './client'
+import { checkDomainInBlackList, isAllBlackedByFireWall } from './client'
 import type { proxyServer } from './client'
 import * as Util from 'util'
 import { logger } from '../GateWay/log'
@@ -74,7 +74,7 @@ export class socks5 {
 					}
 					//console.log ( Util.inspect ( uuuu ))
 					//console.log (`doing gateway.requestGetWay ssl [${ uuuu.ssl }][${ uuuu.host }:${ uuuu.port }] cmd [${ uuuu.cmd }]`)
-					const id = `[${ this.clientIP }:${ this.port }][${ Util.inspect(uuuu) }] `
+					
 					
 					return this.proxyServer.gateway.requestGetWay ( id, uuuu, this.agent, this.socket )
 					
@@ -259,12 +259,13 @@ export class sockt4 {
 	public connectStat2 () {
 		const CallBack = ( err?: Error, _data?: Buffer ) => {
 			if ( err ) {
+				const httpHead = new HttpProxyHeader ( buffer )
 				if ( this.proxyServer.useGatWay && _data && _data.length && this.socket.writable && this.proxyServer.gateway ) {
 					const uuuu : VE_IPptpStream = {
 						uuid: Crypto.randomBytes (10).toString ('hex'),
 						host: this.host || this.targetIpV4 ,
 						buffer: _data.toString ( 'base64' ),
-						cmd: Rfc1928.CMD.CONNECT,
+						cmd: httpHead.command,
 						ATYP: Rfc1928.ATYP.IP_V4,
 						port: this.port,
 						ssl: isSslFromBuffer ( _data )

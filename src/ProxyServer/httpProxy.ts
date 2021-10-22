@@ -15,8 +15,8 @@
  */
 
 
-import * as Crypto from 'crypto'
-import * as Url from 'url'
+import {createHash } from 'crypto'
+import { isIP } from 'net'
 
 const cacheFileType = /\.jpeg$|\.html$|\.css$|\.gif$|\.js$|\.jpg$|\.png$|\.svg$|\.xml$/i
 
@@ -26,7 +26,6 @@ export default class httpProxy {
 	public text: string
 	public _parts: string []
 	public headers: Object
-	
 	constructor ( public buffer: Buffer ) {
 		this.text = buffer.toString( 'utf8' )
 		this._parts = this.text.split ('\r\n\r\n')
@@ -67,7 +66,7 @@ export default class httpProxy {
 
 	get isHttps () {
 
-		return ( this.isConnect && this.Url.port === '443' )
+		return ( this.isConnect )
 	}
 	
 	get isHttpRequest () {
@@ -75,18 +74,19 @@ export default class httpProxy {
 	}
 
 	get command () {
-		return this.commandWithLine
+		return this.commandWithLine[0].split(' ')[0]
 	}
 
-	get Url () {
-		let http = this.commandWithLine[0].split (' ')[1]
-		http = !/^http/i.test ( http ) ? 'http://' + http : http
-		return Url.parse ( http )
-	}
 
 	get isConnect () {
-
 		return ( /^connect /i.test ( this.commandWithLine[0] ) )
+	}
+
+	get hostIpAddress () {
+		if (!isIP (this.host)) {
+			return ''
+		}
+		return this.host
 	}
 
 	get isGet () {
@@ -104,7 +104,7 @@ export default class httpProxy {
 	get cachePath () {
 		if ( !this.isGet || ! this.isCanCacheFile )
 			return null
-		return Crypto.createHash ( 'md5' ).update ( this.Url.host + this.Url.href ).digest( 'hex' )
+		return createHash ( 'md5' ).update ( this.host + this.commandWithLine[0] ).digest( 'hex' )
 	}
 
 	get isCanCacheFile () {

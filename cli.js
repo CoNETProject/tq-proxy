@@ -16,10 +16,7 @@ const util_1 = require ( "util" );
 const { logger } = require("./dist/GateWay/log");
 const [,,...args] = process.argv;
 const setup = require ('./package.json')
-
-
-let gateway = false;
-let proxy = false;
+let debug = false
 
 const printUsage = () => {
     console.error (`qtgate server version ${ setup.version }\nGateway usage: qtgate-server -g password port\nProxy server usage: qtgate-server -p gatewayFileName.json proxyPort [listenPORT] [listenPath] \n` );
@@ -32,6 +29,13 @@ const checkIptables = () => {
     }
     return true;
 };
+
+args.forEach(n => {
+    if (/\-d/.test(n)) {
+        debug = true;
+    };
+});
+
 const checkIPTables = ( CallBack ) => {
     if ( !checkIptables()) {
         return CallBack ( new Error ('Linux only!'))
@@ -60,7 +64,7 @@ if ( args[0] === '-g' ) {
 		makeWork();
 	} else {
 		const server = require('./dist/GateWay/qtGate_httpServer');
-    	new server.ssModeV1 ( args [2], args [1]);
+    	new server.ssModeV2 ( args [2], args [1]);
 	}
     
 }
@@ -93,6 +97,6 @@ if ( args[0] === '-p' ) {
     }
    
     const proxyServer = require ('./dist/ProxyServer/client');
-    const server = new proxyServer.proxyServer ( args[2], gateway );
+    const server = new proxyServer.proxyServer ( args[2], gateway, debug );
 		
 }

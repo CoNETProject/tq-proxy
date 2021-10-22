@@ -28,6 +28,8 @@ import gateWay from './gateway'
 import * as Os from 'os'
 import { logger } from '../GateWay/log'
 import colors from 'colors/safe'
+import { inspect } from 'util'
+
 const whiteIpFile = 'whiteIpList.json'
 Http.globalAgent.maxSockets = 1024
 const ipConnectResetTime = 1000 * 60 * 5
@@ -84,16 +86,8 @@ export const checkDomainInBlackList = ( BlackLisk: string[], domain: string, Cal
 	})
 }
 
-const testLogin = ( req: Buffer, loginUserList: string ) => {
-	
-	const header = new HttpProxyHeader ( req )
-	if ( header.isGet && header.Url.path === loginUserList )
-		return true
-    
-	return false
-}
 
-const closeClientSocket = ( socket: Net.Socket, status: number, body: string ) => {
+const closeClientSocket = ( socket: Net.Socket, status: number = 404) => {
 	if ( !socket || ! socket.writable )
 		return
 	let stat = res._HTTP_404
@@ -114,8 +108,8 @@ const closeClientSocket = ( socket: Net.Socket, status: number, body: string ) =
 		default:
 			break;
 	}
-	socket.end ( stat )
-	return socket.resume ()
+	return socket.end ( stat )
+	
 }
 
 const _connect = ( hostname: string, hostIp: string, port: number, clientSocket: Net.Socket, data: Buffer, connectHostTimeOut: number,  CallBack ) => {
@@ -191,17 +185,15 @@ const _connect = ( hostname: string, hostIp: string, port: number, clientSocket:
 
 
 
-export const tryConnectHost = ( hostname: string, hostIp: domainData, port: number, data: Buffer, clientSocket: Net.Socket, isSSLConnect: boolean, 
-	checkAgainTimeOut: number, connectTimeOut: number, gateway: boolean, CallBack ) => {
-		const obj = { hostname, hostIp, port, isSSLConnect}
-		logger (`tryConnectHost`, obj )
-	if ( isSSLConnect ) {
+export const getSslConnectFirstData = ( clientSocket: Net.Socket, data: Buffer, first: boolean, CallBack ) => {
+	if ( first ) {
 		clientSocket.once ( 'data', ( _data: Buffer ) => {
-			return tryConnectHost ( hostname, hostIp, port, _data, clientSocket, false, checkAgainTimeOut, connectTimeOut, gateway, CallBack )
+			return getSslConnectFirstData ( clientSocket, _data, false, CallBack )
 		})
-		return closeClientSocket ( clientSocket, -200, '' )
+		return closeClientSocket ( clientSocket, -200 )
 	}
-	return CallBack (new Error('skip'))
+		
+	return CallBack (null, data )
 	
 }
 
@@ -224,65 +216,55 @@ const isSslFromBuffer = ( buffer ) => {
 }
 
 
-const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, useGatWay: boolean, ip6: boolean, connectTimeOut: number,  
-	domainListPool: Map < string, domainData >, _gatway: gateWay, checkAgainTime: number, blackDomainList: string[]) => {
+const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, debug: boolean ) => {
 
-	const httpHead = new HttpProxyHeader ( buffer )
-	const hostName = httpHead.Url.hostname
-	const userAgent = httpHead.headers [ 'user-agent' ]
-
-	const CallBack = ( err?: Error, _data?: Buffer ) => {
-
-		if ( err ) {
-			
-			if ( useGatWay && _data && _data.length && clientSocket.writable ) {
-				const uuuu : VE_IPptpStream = {
-					uuid: Crypto.randomBytes (10).toString ('hex'),
-					host: hostName,
-					buffer: _data.toString ( 'base64' ),
-					cmd: Rfc1928.CMD.CONNECT,
-					ATYP: Rfc1928.ATYP.IP_V4,
-					port: httpHead.Port,
-					ssl: isSslFromBuffer ( _data )
-				}
-
-				const id = `[${ clientSocket.remoteAddress.split(':')[3] }:${ clientSocket.remotePort }][${ uuuu.uuid }] `
-				if ( _gatway && typeof _gatway.requestGetWay === 'function' ) {
-					return _gatway.requestGetWay ( id, uuuu, userAgent, clientSocket )
-				}
-				
-				
-			}
-
-			
-		}
-		return clientSocket.end ( res.HTTP_403 )
-		
-	}
-
-	
 	if ( !_gatway || typeof _gatway.requestGetWay !== 'function' ) {
-		console.log (`httpProxy !gateWay stop SOCKET res._HTTP_PROXY_302 `)
-
-		
+		console.log (colors.red(`httpProxy !gateWay stop SOCKET res._HTTP_PROXY_302 `))
 		return clientSocket.end ( res._HTTP_PROXY_302 ())
 	}
-
-	
-	return checkDomainInBlackList ( blackDomainList, hostName, ( err, result: boolean ) => {
 		
-		if ( result ) {
-			console.log (`checkDomainInBlackList CallBack result === true`)
-			return clientSocket.end ( res.HTTP_403 )
+	const httpHead = new HttpProxyHeader ( buffer )
+	const hostName = httpHead.host
+	const userAgent = httpHead.headers [ 'user-agent' ]
+	const connect = ( _, _data?: Buffer ) => {
+		const uuuu : VE_IPptpStream = {
+			uuid: Crypto.randomBytes (10).toString ('hex'),
+			host: hostName,
+			hostIPAddress: httpHead.hostIpAddress,
+			buffer: _data.toString ( 'base64' ),
+			cmd: httpHead.command,
+			ATYP: Rfc1928.ATYP.IP_V4,
+			port: httpHead.Port,
+			ssl: isSslFromBuffer ( _data )
 		}
-		
-		const port = parseInt ( httpHead.Url.port ||  httpHead.isHttps ? '443' : '80' )
-		const isIp = Net.isIP ( hostName )
-		const hostIp: domainData = ! isIp ? domainListPool.get ( hostName ) : { dns: [{ family: isIp, address: hostName, expire: null, connect: [] }], expire: null }
 
-		return tryConnectHost ( hostName, hostIp, port, buffer, clientSocket, httpHead.isConnect, checkAgainTime, connectTimeOut, useGatWay, CallBack )
+		const requestObj: requestObj = {
+			remotePort: clientSocket.remotePort,
+			remoteAddress: clientSocket.remoteAddress.split(':')[3],
+			targetHost: hostName,
+			targetPort: httpHead.Port,
+			methods: httpHead.command,
+			uuid: uuuu.uuid
+		}
 
-	})
+		if (!_data || ! _data.length) {
+			console.log( colors.red(`httpProxy got unknow request stop proxy request `))
+			closeClientSocket(clientSocket)
+			return console.log( inspect( requestObj, false, 3, true ))
+		}
+
+		if ( _gatway && typeof _gatway.requestGetWay === 'function' ) {
+			return _gatway.requestGetWay ( requestObj, uuuu, userAgent, clientSocket )
+		}
+		console.log (colors.red(`httpProxy _gatway have no ready!`))
+		return closeClientSocket(clientSocket)
+	}	
+
+	if ( httpHead.isConnect ) {
+		return getSslConnectFirstData ( clientSocket, buffer, true, connect )
+	}
+	return connect (null, buffer )
+	
 
 }
 
@@ -328,7 +310,7 @@ export class proxyServer {
 	private network = false
 	private getGlobalIpRunning = false
 	private server: Net.Server = null
-	public gateway = new gateWay ( this.multipleGateway )
+	public gateway = new gateWay ( this.multipleGateway, this.debug )
 	public whiteIpList = []
 	public domainBlackList = []
 	public domainListPool = new Map ()
@@ -384,74 +366,75 @@ export class proxyServer {
     
 	constructor ( 
 		public proxyPort: string,						//			Proxy server listening port number
-		private multipleGateway: IConnectCommand[]	 	//			gateway server information
+		private multipleGateway: IConnectCommand[],	 	//			gateway server information
+		public debug = false
 		) {
-		this.getGlobalIp ( this.gateway )
-		let socks = null
-		
-		this.server = Net.createServer ( socket => {
-			const ip = socket.remoteAddress
-			this.clientSockets.add (socket)
-			const isWhiteIp = this.whiteIpList.find ( n => { return n === ip }) ? true : false
-			let agent = 'Mozilla/5.0'
-				//	windows 7 GET PAC User-Agent: Mozilla/5.0 (compatible; IE 11.0; Win32; Trident/7.0)
-
-			//		proxy auto setup support
-			socket.once ( 'data', ( data: Buffer ) => {
-				const dataStr = data.toString()
-				
-				if ( /^GET \/pac/.test ( dataStr )) {
-					logger(colors.blue(dataStr))
-					const httpHead = new HttpProxyHeader ( data )
-					agent = httpHead.headers['user-agent']
-					const sock5 = /Firefox|Windows NT|WinHttp-Autoproxy-Service|Darwin/i.test ( agent ) && ! /CFNetwork|WOW64/i.test ( agent )
-					
-					
-					const ret = getPac ( httpHead.host, this.proxyPort, /pacHttp/.test( dataStr ), sock5 )
-					console.log ( `/GET \/pac from :[${ socket.remoteAddress }] sock5 [${ sock5 }] agent [${ agent }] httpHead.headers [${ Object.keys( httpHead.headers )}]`)
-					console.log ( dataStr )
-					console.log ( ret )
-					return socket.end ( ret )
-				}
-				
-				switch ( data.readUInt8 ( 0 )) {
-
-					case 0x4:
-						return socks = new Socks.sockt4 ( socket, data, agent, this )
-					case 0x5:
-						logger (`socket.once 0x05`, colors.blue(data.toString('hex')))
-						return socks = new Socks.socks5 ( socket, agent, this )
-					default:
-						logger ( ' data.readUInt8 ( 0 ) = ', colors.blue( data.readUInt8 ( 0 ).toString(16)))
-						return httpProxy ( socket, data, this.useGatWay, this.hostGlobalIpV6 ? true : false, this.connectHostTimeOut, this.domainListPool, this.gateway,
-							this.checkAgainTimeOut, this.domainBlackList )
-				}
-			})
-
-			socket.on ( 'error', err => {
-				socks = null
-				//console.log ( `[${ip}] socket.on error`, err.message )
-			})
-
-			socket.once ( 'end', () => {
-				this.clientSockets.delete(socket)
-				socks = null
-			})
+			logger (colors.blue(`proxyServer startup debug [${ debug }]`))
+			this.getGlobalIp ( this.gateway )
+			let socks = null
 			
-		})
+			this.server = Net.createServer ( socket => {
+				const ip = socket.remoteAddress
+				this.clientSockets.add (socket)
+				const isWhiteIp = this.whiteIpList.find ( n => { return n === ip }) ? true : false
+				let agent = 'Mozilla/5.0'
+					//	windows 7 GET PAC User-Agent: Mozilla/5.0 (compatible; IE 11.0; Win32; Trident/7.0)
 
-		this.server.on ( 'error', err => {
-			console.log ( 'proxy server :', err )
-			
-		})
+				//		proxy auto setup support
+				socket.once ( 'data', ( data: Buffer ) => {
+					const dataStr = data.toString()
+					
+					if ( /^GET \/pac/.test ( dataStr )) {
+						logger(colors.blue(dataStr))
+						const httpHead = new HttpProxyHeader ( data )
+						agent = httpHead.headers['user-agent']
+						const sock5 = /Firefox|Windows NT|WinHttp-Autoproxy-Service|Darwin/i.test ( agent ) && ! /CFNetwork|WOW64/i.test ( agent )
+						
+						
+						const ret = getPac ( httpHead.host, this.proxyPort, /pacHttp/.test( dataStr ), sock5 )
+						console.log ( `/GET \/pac from :[${ socket.remoteAddress }] sock5 [${ sock5 }] agent [${ agent }] httpHead.headers [${ Object.keys( httpHead.headers )}]`)
+						console.log ( dataStr )
+						console.log ( ret )
+						return socket.end ( ret )
+					}
+					
+					switch ( data.readUInt8 ( 0 )) {
 
-		this.server.maxConnections = 65536
+						case 0x4:
+							return socks = new Socks.sockt4 ( socket, data, agent, this )
+						case 0x5:
+							logger (`socket.once 0x05`, colors.blue(data.toString('hex')))
+							return socks = new Socks.socks5 ( socket, agent, this )
+						default:
+							
+							return httpProxy ( socket, data, this.gateway, this.debug )
+					}
+				})
 
-		this.server.listen ( proxyPort, () => {
-			return console.log ( 'proxy start success on port :', proxyPort  )
-		})
+				socket.on ( 'error', err => {
+					socks = null
+					//console.log ( `[${ip}] socket.on error`, err.message )
+				})
 
-	}
+				socket.once ( 'end', () => {
+					this.clientSockets.delete(socket)
+					socks = null
+				})
+				
+			})
+
+			this.server.on ( 'error', err => {
+				console.log ( 'proxy server :', err )
+				
+			})
+
+			this.server.maxConnections = 65536
+
+			this.server.listen ( proxyPort, () => {
+				return console.log ( 'proxy start success on port :', proxyPort  )
+			})
+
+		}
 
 	public exit () {
 		console.log (`************ proxyServer on exit ()`)
@@ -461,7 +444,7 @@ export class proxyServer {
 
 	public reNew ( multipleGateway: IConnectCommand[] ) {
 		
-		this.gateway = new gateWay ( this.multipleGateway = multipleGateway  )
+		this.gateway = new gateWay ( this.multipleGateway = multipleGateway, this.debug )
 	}
 
 	public changeDocker ( data: IConnectCommand ) {
@@ -472,7 +455,7 @@ export class proxyServer {
 			return saveLog (`on changeDocker [${ data.containerUUID }] Add it`)
 		}
 		this.multipleGateway [ index ] = data
-		return this.gateway = new gateWay ( this.multipleGateway )
+		return this.gateway = new gateWay ( this.multipleGateway, this.debug )
 	}
 
 	public close ( Callback ) {
