@@ -15,19 +15,26 @@
  * limitations under the License.
  */
 
-import * as Net from 'net'
+import type { Socket, Server } from 'net'
+import { isIPv4, connect } from 'net'
 import { lookup } from 'dns'
-import * as Stream from 'stream'
-
+import { Transform, Writable  } from 'stream'
+import Express from 'express'
 import * as Compress from './compress'
-import * as StreamFun from './streamFunction'
 import { writeFile } from 'fs'
-import { logger } from './log'
+import { logger, hexDebug } from './log'
 import colors from 'colors/safe'
 const MaxAllowedTimeOut = 1000 * 60 * 60
 const blockHostFIleName = './blockHost.json'
 import { inspect } from 'util'
+const k = `< Server: nginx/1.6.2
+< Date: Fri, 22 Oct 2021 04:45:23 GMT
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 612
+< Connection: keep-alive
+< Vary: Accept-Encoding
 
+`
 const otherRespon = ( body: string| Buffer, _status: number ) => {
 	const Ranges = ( _status === 200 ) ? 'Accept-Ranges: bytes\r\n' : ''
 	const Content = ( _status === 200 ) ? `Content-Type: text/html; charset=utf-8\r\n` : 'Content-Type: text/html\r\n'
@@ -77,7 +84,7 @@ Commercial support is available at
 </body>
 </html>
 `
-return otherRespon ( Buffer.from ( kkk ), 200 )
+return otherRespon ( kkk, 200 )
 }
 
 const dnsLookup = ( hostName: string, CallBack ) => {
@@ -90,7 +97,7 @@ const dnsLookup = ( hostName: string, CallBack ) => {
 	})
 }
 
-class listen extends Stream.Transform {
+class listen extends Transform {
 	constructor ( private headString: string ) { super ()}
 	public _transform ( chunk: Buffer, encode, cb ) {
 
@@ -107,7 +114,7 @@ interface blockList {
 	date: string
 	error: string
 }
-
+/*
 export class ssModeV1 {
 	private logFileName = `qtgate_httpServer`
 	private serverNetPool: Map < number, Net.Server > = new Map ()
@@ -162,9 +169,9 @@ export class ssModeV1 {
 
             const streamEncrypt = new Compress.encryptStream ( id, this.password, 500, n => {
 				return 
-			}, null, () => {
+			}, null, err => {
 				
-            	const firstConnect = new FirstConnect ( socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
+            	const firstConnect = new FirstConnect ( this.debug, streamFunBlock, socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
 
                 firstConnect.once ( 'error', err => {
                     logger ( colors.magenta(`[${ streamFunBlock.part0 }]firstConnect.on ERROR: ${err.message}`))
@@ -206,7 +213,7 @@ export class ssModeV1 {
         })
 	}
 
-	constructor ( private port: number, private password ) {
+	constructor ( private port: number, private password, public debug: boolean = false ) {
 		this.makeNewServer ( port )
 		try {
 			this.blockList = require (blockHostFIleName)
@@ -255,37 +262,44 @@ export class ssModeV1 {
 		return this.makeNewServer ( portNumber )
 	}
 }
-
+*/
 
 const saveConnectErrorIPAddress = ( blockedHost: blockList[], CallBack ) => {
 	return writeFile ( blockHostFIleName, JSON.stringify (blockedHost), 'utf8', CallBack )
 }
 
 
-class FirstConnect extends Stream.Writable {
-	private socket: Net.Socket = null
+class FirstConnect extends Writable {
+	private socket: Socket = null
 
-	constructor ( private clientSocket: Net.Socket, private encrypt: Compress.encryptStream, private decrypt: Compress.decryptStream, private freeDomain: string[], private freeIpaddress: string[], private blockList: blockList[], 
+
+	constructor ( private debug: boolean, private clientSocket: Socket, private encrypt: Compress.encryptStream, private decrypt: Compress.decryptStream, private freeDomain: string[], private freeIpaddress: string[], private blockList: blockList[], 
 		private hostCount: Map < string, number >) { super ()}
     
 	public _write ( chunk: Buffer, encode, cb ) {
 
 		//		first time
-		if ( !chunk?.length ) {
-			return cb (new Error (`chunk EOF!`))
+		// if ( !chunk?.length ) {
+		// 	return cb (new Error (`chunk EOF!`))
+		// }
+		const _data = chunk.toString ()
+		let data: VE_IPptpStream = null
+		try {
+			data = JSON.parse ( _data )
+		} catch ( e ) {
+			console.log ( `FirstConnect JSON.parse [${ _data }]catch error:` , e )
+			return cb ( e )
 		}
-		if ( ! this.socket ) {
-			const _data = chunk.toString ()
-			let isIpv4 = false
-			let data = null
-			try {
-				data = JSON.parse ( _data )
-			} catch ( e ) {
-				console.log ( `FirstConnect JSON.parse [${ _data }]catch error:` , e )
-				return cb ( e )
-			}
 
-			if ( data?.hostName?.length ) {
+
+		
+		if ( ! this.socket ) {
+			
+			let _isIpv4 = false
+			/**
+			 * 				Client Doname Dnslook test 
+			 */
+			if ( data.hostName?.length ) {
 				this.encrypt.dataCount = this.decrypt.dataCount = false
 				//console.log ( `data.host [${ data.host }] is free `)
 				return dnsLookup ( data.hostName, ( err, data ) => {
@@ -297,57 +311,44 @@ class FirstConnect extends Stream.Writable {
 					this.encrypt.end ( data )
 				})
 			}
-
+			
+			
 			if ( data.uuid ) {
-				this.decrypt.id += `[${ data.host }:${ data.port }]`
+				_isIpv4 = isIPv4 ( data.host )
+				this.encrypt.id = this.decrypt.id = 
+					`{ ${ colors.grey( data.uuid )} } ${ colors.green ( this.decrypt.id ) }[${_isIpv4?colors.green('IPv4'):colors.red('IPv6')}] ---ssl[${ colors.green( data.ssl ? 'true': 'false' ) }]--->[ ${ colors.green( data.host + ':' + data.port) } ]`
+
 				const hostMatch = data.host + ':' + data.port
-				console.log ( colors.blue(`data.uuid = [${ data.uuid }] target: [${ colors.green( hostMatch )}] ssl[${colors.green( data.ssl )}]`))
 
 				let hostCount = this.hostCount.get ( hostMatch ) || 0
 				this.hostCount.set ( hostMatch, ++ hostCount )
-				const isBlacked = this.blockList.findIndex (n => n.host === data.host ) > -1 ? true : false
+				const isBlacked = this.blockList.findIndex ( n => n.host === data.host ) > -1 ? true : false
 				
 				if ( isBlacked ) {
-					console.log (`*************************** [${ new Date ().toISOString ()}] [${ data.host }:${ data.port }] in blockList STOP it!`)
+					logger (colors.red(`*************************** [${ this.decrypt.id }] in blockList STOP it!`))
 					return cb ( new Error ( `[${ data.host }] in blockList` ))
 				}
-				isIpv4 = Net.isIPv4 ( data.host )
-				// if ( isIpv4 = Net.isIPv4 ( data.host )){
-					
-				// 	if ( this.freeIpaddress.findIndex ( n => { return n === data.host }) > -1 ) {
-				// 		console.log ( `IP address host [${ data.host }] is free `)
-				// 		this.encrypt.dataCount = this.decrypt.dataCount = false
-				// 	} else {
-				// 		this.encrypt.dataCount = this.decrypt.dataCount = true
-				// 		console.log ( `IP address host [${ data.host }] is NOT FREE `)
-				// 	}
 
-				// } else {
+				this.socket = connect ({ port: data.port, host: data.host }, () => {
 
-				// 	if ( this.freeDomain.findIndex ( n => { return new RegExp ( n ).test ( data.host )}) > -1 ) {
-				// 		this.encrypt.dataCount = this.decrypt.dataCount = false
-				// 		console.log ( `Domain host [${ data.host }] is free `)
-				// 	} else {
-				// 		this.encrypt.dataCount = this.decrypt.dataCount = true
-				// 		//console.log ( `Domain host [${ data.host }] is NOT FREE freeDomain = ${ Util.inspect ( this.freeDomain ) }`)
-				// 	}
-				// }
-				console.log ( `Net.connect ({ port: ${ data.port } , host: ${ data.host }})`)
+					this.socket.pipe ( this.encrypt ).pipe ( this.clientSocket ).pipe( this.decrypt ).pipe( this.socket )
 
-				this.socket = Net.connect ({ port: data.port, host: data.host }, () => {
+					const buffer = Buffer.from ( data.buffer, 'base64' )
 
-					this.socket.pipe ( this.encrypt ).pipe ( this.clientSocket )
-					
-					this.socket.write ( Buffer.from ( data.buffer, 'base64' ))
+					logger(colors.blue(`write buffer to ${ this.decrypt.id }`))
+					hexDebug(buffer)
+
+					this.socket.write ( buffer )
 					return cb ()
 				})
 
 				this.socket.once ( 'end', () => {
-					return this.end ()
+					logger( colors.blue(`${ this.decrypt.id } Target on END()`))
+					return this.clientSocket.end()
 				})
 
-				return this.socket.once ( 'error', err => {
-					console.log ( 'FirstConnect socket on error!', err.message )
+				this.socket.once ( 'error', err => {
+					logger ( colors.red(`FirstConnect ${ this.decrypt.id } Target socket on error! [${ err.message }]`))
 					//this.blockList.push ({ host: data.host, port: data.port, error: err.message, date: new Date().toISOString ()})
 
 					this.end ()
@@ -357,7 +358,7 @@ class FirstConnect extends Stream.Writable {
 					// 	}
 					// })
 				})
-				
+				return
 			}
 
 			console.log (`data.uuid == null!`)
@@ -366,11 +367,174 @@ class FirstConnect extends Stream.Writable {
 		}
 
 		//		the next stream
+
+		logger (colors.blue(`FirstConnect next chunk coming:`))
+		hexDebug (chunk)
+
 		if ( this.socket.writable ) {
-			this.socket.write ( chunk )
-			return cb ()
+			return this.socket.write ( Buffer.from ( chunk.toString(), 'base64' ), err => {
+				if ( err ) {
+					this.socket.once ('drain', () => {
+						return cb ()
+					})
+				}
+				return cb ()
+			})
+			
+		}
+		
+		return cb ( new Error ( 'FirstConnect socket.writable=false' ))
+	}
+}
+
+const IsBase64 = ( base64String: string ) => {
+	// Credit: oybek https://stackoverflow.com/users/794764/oybek
+	if ( /^[a-zA-Z0-9\+/]*={0,2}$/.test(base64String)) {
+		return true
+	}
+	return false
+}
+
+
+
+export class ssModeV2 {
+
+	private server: Server = null
+	private _freeDomain: string [] = []
+	private _freeIpAddress: string [] = []
+	private blockList: blockList[] = []
+	private hostConet = new Map ()
+
+	private firstConnectV2 = ( req: Express.Request, res: Express.Response) => {
+		const id = `[${ colors.green( req.socket.remoteAddress ) + colors.red(':') + colors.green( req.socket.remotePort.toString() )}]`
+		res.uncork
+
+		res.once ('close', () => {
+			this.server.getConnections ( (err, connects) => {
+				if ( err ) {
+					return logger (colors.bgRed(`FirstConnectV2 getConnections had error [${ err.message }]`))
+				}
+				logger (colors.red(`${ id } request on close, Total connections [${ connects }]`))
+			})
+			
+		})
+
+		const session404End = () => {
+			logger(colors.red(`Illegal request: request have not Base64 format!`))
+			hexDebug (Buffer.from(url))
+			if ( res.socket.writable ) {
+				res.socket.write(otherRespon('',404))
+			}
+			res.socket.removeAllListeners()
+			return res.socket.end()
 		}
 
-		return cb ( new Error ( 'FirstConnect socket.writable=false' ))
+		this.server.getConnections ( (err, connects) => {
+			if ( err ) {
+				return logger (colors.bgRed(`FirstConnectV2 getConnections had error [${ err.message }]`))
+			}
+			logger (colors.blue(`new Connect from [${ id }], Total connections [${ connects }]`))
+		})
+	
+		const url = req.url
+	
+		if ( !IsBase64(url)) {
+			
+			return session404End ()
+		}
+	
+		const _buf = Buffer.from (url.substr(1), 'base64')
+
+		const streamDecrypt = new Compress.decryptStream ( id, this.password, () => {
+			return
+		})
+
+		streamDecrypt.once ( 'error', err => {
+			logger (colors.red(`${id} streamDecrypt had error STOP connecting err: ${ err.message }`))
+			return session404End ()
+		})
+
+		const streamEncrypt = new Compress.encryptStream ( id, this.password, 500, () => {
+			return 
+		}, null, err => {
+			
+			const firstConnect = new FirstConnect ( this.debug, res.socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
+
+			firstConnect.once ( 'error', err => {
+				logger ( colors.magenta(`${ id } FirstConnect class on Error: ${ err.message }`))
+				return session404End ()
+			})
+
+			streamDecrypt.once('data', data => {
+				firstConnect.write (data)
+			})
+
+			streamDecrypt.once ('error', err => {
+				logger( colors.magenta(`${ id } FirstConnect pipe on Error: ${ err.message }`) )
+				return session404End ()
+			})
+			return streamDecrypt.write (_buf)
+		})
+
+
+
+		return 
+
+	}
+
+	private makeNewServer () {
+		const app: Express.Application = Express()
+		app.use( Express.json())
+		
+		app.once ('error', err => {
+			
+			return logger(colors.red(`Express server on ERROR, restart ${ err.message }`))
+		})
+
+		app.get('/', (req, res) => {
+			if ( res.socket.writable ) {
+				res.socket.write(returnHome())
+			}
+			res.socket.removeAllListeners()
+			return res.socket.end()
+		})
+
+		app.get ('/*', (req, res)=> {
+			
+			return this.firstConnectV2 (req, res )
+		})
+
+		this.server = app.listen ( this.port, () => {
+			return logger (colors.blue(`\n**************************************************\nGateway server start listen at port [${ this.port }]\n**************************************************`))
+		})
+
+		this.server.maxConnections = 65500
+
+		this.server.once ('error', err => {
+			logger (colors.red (`Gateway server once ERROR, restart now, [${ err.message }]`))
+			this.server.removeAllListeners ()
+			this.server.close (() => {
+				return this.makeNewServer ()
+			})
+			
+		})
+
+	}
+
+	constructor( private port: number, private password, public debug: boolean = false ) {
+		this.makeNewServer ()
+		try {
+			this.blockList = require (blockHostFIleName)
+		} catch ( ex ) {
+			this.blockList = [
+				{host: '42.63.21.217', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()},
+				{host: '139.170.156.220', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()}
+			]
+			// saveConnectErrorIPAddress ( this.blockList, err => {
+			// 	if ( err ) {
+			// 		console.log ( `ssModeV1 constructor saveConnectErrorIPAddress error`, err )
+			// 	}
+			// })
+		}
 	}
 }

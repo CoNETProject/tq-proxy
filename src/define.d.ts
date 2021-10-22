@@ -15,18 +15,28 @@ interface imapConnect {
     imapIgnoreCertificate: boolean
 }
 interface VE_IPptpStream {
-    type?: string;
-    buffer: string;
-    host: string;
-    port: number;
-    cmd: number;
-    ATYP: number;
-    uuid?: string;
-    length?:number;
+    type?: string
+    buffer: string
+    host: string
+    port: number
+    cmd: string
+    ATYP: number
+    uuid?: string
+    length?:number
     randomBuffer?: Buffer
     ssl: boolean
+    hostIPAddress: string
+    hostName?: string       //      for test gateway from client
 }
 
+interface requestObj {
+    remotePort: number
+    remoteAddress: string
+    targetHost: string
+    targetPort: number
+    methods: string
+    uuid: string
+}
 interface dnsAddress {
 	address: string
 	family: number

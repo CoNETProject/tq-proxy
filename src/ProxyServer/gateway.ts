@@ -19,8 +19,9 @@ import * as Net from 'net'
 import * as res from './res'
 import * as Stream from 'stream'
 import * as Crypto from 'crypto'
-import { logger } from '../GateWay/log'
+import { logger, hexDebug } from '../GateWay/log'
 import colors from 'colors/safe'
+import { inspect } from 'util'
 
 const Day = 1000 * 60 * 60 * 24
 
@@ -81,7 +82,7 @@ export default class gateWay {
 		return this.multipleGateway [ this.currentGatewayPoint ]
 	}
 
-	constructor ( private multipleGateway: IConnectCommand[]) {
+	constructor ( private multipleGateway: IConnectCommand[], private debug) {
 	}
 
 	public hostLookup ( hostName: string, userAgent: string, CallBack: ( err?: Error, hostIp?: domainData ) => void ) {
@@ -91,16 +92,16 @@ export default class gateWay {
 		const gateway = this.getCurrentGateway ()
 		const encrypt = new Compress.encryptStream ( gateway.randomPassword, 3000, ( str: string ) => {
 			return this.request ( str, gateway )
-		})
+		}, this.debug )
 		
 		const finish = new hostLookupResponse ( CallBack )
 		const httpBlock = new Compress.getDecryptClientStreamFromHttp ()
-		const decrypt = new Compress.decryptStream ( gateway.randomPassword )
+		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
 		
 		logger (`try connect gateway server: [${ gateway.gateWayIpAddress }:${ gateway.gateWayPort }] password[${ gateway.randomPassword }]`)
 
 		const _socket = Net.createConnection ( gateway.gateWayPort, gateway.gateWayIpAddress, () => {
-			logger (`connected Gateway [${ gateway.gateWayIpAddress }] doing encrypt.write ( _data )`)
+			logger (`connected Gateway [${ gateway.gateWayIpAddress }: ${ gateway.gateWayPort }] doing encrypt.write ( _data )`)
 			encrypt.write ( _data )
 		})
 
@@ -126,7 +127,7 @@ export default class gateWay {
 
 	}
 
-	public requestGetWay ( id: string, uuuu: VE_IPptpStream, userAgent: string, socket: Net.Socket ) {
+	public requestGetWay ( requestObj: requestObj, uuuu: VE_IPptpStream, userAgent: string, socket: Net.Socket ) {
 		
 		//			remote server was stoped
 		if ( this.RemoteServerDistroyed ) {
@@ -141,15 +142,14 @@ export default class gateWay {
 			return socket.end ( res._HTTP_404 )
 		}
 
-		const decrypt = new Compress.decryptStream ( gateway.randomPassword )
+		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
 		const encrypt = new Compress.encryptStream ( gateway.randomPassword, 3000, ( str: string ) => {
 			return this.request ( str, gateway )
-		})
+		}, this.debug )
 
 		const httpBlock = new Compress.getDecryptClientStreamFromHttp ()
 
 		httpBlock.once ( 'error', err => {
-
 			socket.end ( res._HTTP_404 )
 		})
 
@@ -163,26 +163,32 @@ export default class gateWay {
 			socket.end ( res._HTTP_404 )
 		})
 
-		logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}] for [${ colors.green(uuuu.host)}]`))
+		logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}] for [${ inspect( requestObj, false, 3, true ) }]`))
 		const _socket = Net.createConnection ( gateway.gateWayPort || 80, gateway.gateWayIpAddress, () => {
 			if ( encrypt && encrypt.writable ) {
-				return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ))
+				hexDebug (Buffer.from(uuuu.buffer, 'base64'))
+				return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ), () => {
+					socket.resume()
+				})
+				
 			}
-			console.log (`encrypt.writable == false ` )
+			console.log (inspect (requestObj))
+			logger( colors.red(`encryptStream writable false!`))
 			return socket.end ( res._HTTP_404 )
 			
 		})
 
 		_socket.once ( 'error', err => {
-
+			logger ( colors.red(`Gateway server [${ gateway.gateWayIpAddress }] on error ${ colors.grey( err.message )}`))
 			socket.end ( res._HTTP_404 )
 		})
 
 		_socket.once ('end', () => {
-			socket.end ( res._HTTP_404 )
+			logger(colors.blue(`Gateway ${uuuu.uuid } on end()`))
+			socket.end ()
 		})
 
-		encrypt.pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( socket ).pipe ( encrypt )
-		//console.log ( `new requestGetWay use gateway[${ gateway.gateWayIpAddress }: ${ gateway.gateWayPort || 80 }]`)
+		socket.pipe ( encrypt ).pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( socket )
+		
 	}
 }
