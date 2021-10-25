@@ -20,7 +20,7 @@ interface VE_IPptpStream {
     host: string
     port: number
     cmd: string
-    ATYP: number
+    //ATYP: number
     uuid?: string
     length?:number
     randomBuffer?: Buffer
@@ -36,6 +36,7 @@ interface requestObj {
     targetPort: number
     methods: string
     uuid: string
+    socks?: string
 }
 interface dnsAddress {
 	address: string

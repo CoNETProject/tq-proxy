@@ -135,22 +135,19 @@ export const openPacket = ( buffer: Buffer ) => {
 		buffer: buffer.slice ( 6 + idLength )
 	}
 }
-const HTTP_HEADER = Buffer.from (
-	`HTTP/1.1 200 OK\r\nDate: ${ new Date ().toUTCString ()}\r\nContent-Type: text/html\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n`, 'utf8')
-const HTTP_EOF = Buffer.from ( '\r\n\r\n', 'utf8' )
+const HTTP_HEADER =
+	Buffer.from (`HTTP/1.1 200 OK\r\nDate: ${ new Date ().toUTCString ()}\r\nContent-Type: text/html\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n`)
 
 export class encryptStream extends Stream.Transform {
 	private salt: Buffer
 	private iv: Buffer
 	public ERR: Error = null
-	private first = true
+	private first = 0
 	public derivedKey: Buffer = null
 	public dataCount = false
-	private BlockBuffer ( _buf: Buffer ) {
-		return Buffer.from( _buf.length.toString( 16 ).toUpperCase() + '\r\n', 'utf8' )
-	}
 
-	constructor ( public id: string, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
+
+	constructor ( public id: string, private debug: boolean, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
 		super ()
 		Async.waterfall ([
 			next => crypto.randomBytes ( 64, next ),
@@ -175,64 +172,86 @@ export class encryptStream extends Stream.Transform {
 	
 	public _transform ( chunk: Buffer, encode, cb ) {
 
-		logger (colors.green(` ${ this.id } encryptStream <--- Target`))
-		hexDebug(chunk)
-		const cipher = crypto.createCipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
-
-		let _text = Buffer.concat ([ Buffer.alloc ( 4, 0 ) , chunk ])
-
-		_text.writeUInt32BE ( chunk.length, 0 )
-
-		if ( chunk.length < this.random ) {
-			_text = Buffer.concat ([ _text, Buffer.allocUnsafe ( Math.random() * 1000 )])
+		this.first ++
+		if ( this.debug ) {
+			logger( colors.blue(`${ this.id } encryptStream got Buffer from Target【${ colors.red( this.first.toString()) }】`))
+			hexDebug(chunk)
 		}
-
-		const _buf = Buffer.concat ([ cipher.update ( _text ), cipher.final ()])
-		const _buf1 = Buffer.concat ([ cipher.getAuthTag (), _buf ])
-
-		if ( this.dataCount ){
-			//console.log ( `**** encryptStream ID[${ this.id }] dataCount is [true]! data.length`)
-			this.download ( _buf1.length )
-		}
-			
 		
-		if ( this.first ) {
+		if ( this.first < 5 ) {
+			const cipher = crypto.createCipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
 
-			this.first = false
-			const black = Buffer.concat ([ this.salt, this.iv, _buf1 ]).toString ( 'base64' )
-			if ( ! this.httpHeader ) {
-				
-				const _buf4 = Buffer.from ( black, 'utf8')
-				const _buffer = Buffer.concat ([ HTTP_HEADER, this.BlockBuffer ( _buf4 ), _buf4, EOF ])
-				logger ( colors.green(`encryptStream have no httpHeader!  first client <--- Target _buffer = [${ _buffer.length }]`))
-
-				return cb ( null, _buffer )
+			let _text = Buffer.concat ([ Buffer.alloc ( 4, 0 ) , chunk ])
+	
+			_text.writeUInt32BE ( chunk.length, 0 )
+	
+			if ( chunk.length < this.random ) {
+				_text = Buffer.concat ([ _text, Buffer.allocUnsafe ( Math.random() * 200 )])
 			}
-			const _data = this.httpHeader ( black )
-			logger (colors.green(`encryptStream first to client client <--- Target _buffer = [${ _data.length }]`))
+	
+			const _buf = Buffer.concat ([ cipher.update ( _text ), cipher.final ()])
+			const _buf1 = Buffer.concat ([ cipher.getAuthTag (), _buf ])
+	
+			if ( this.dataCount ){
+				//console.log ( `**** encryptStream ID[${ this.id }] dataCount is [true]! data.length`)
+				this.download ( _buf1.length )
+			}
+				
+			
+			if ( this.first === 1 ) {
+	
+				const black = Buffer.concat ([ this.salt, this.iv, _buf1 ]).toString ( 'base64' )
 
-			return cb ( null, _data )
+				if ( ! this.httpHeader ) {
+					
+					const _buf4 = Buffer.from ( black, 'utf8')
+					const _buffer = Buffer.concat ([ HTTP_HEADER, _buf4, EOF ])
+					logger ( colors.green(`encryptStream [${ this.id }]client <--- Target _buffer = [${ _buffer.length }] 【${ colors.red( this.first.toString()) }】`))
+					if ( this.debug ) {
+						logger(_buffer.toString())
+						hexDebug(_buffer)
+					}
+					
+					return cb ( null, _buffer )
+				}
 
+				const _data = this.httpHeader ( black )
+				logger (colors.green(`encryptStream [${ this.id }]to client client <--- Target _buffer = [${ _data.length }] 【${ colors.red( this.first.toString()) }】`))
+				return cb ( null, _data )
+	
+			}
+			if ( this.debug ) {
+				logger( colors.blue(`${ this.id } [${colors.red( this.first.toString()) }] encryptStream send data`))
+				hexDebug(_buf1)
+			}
+			
+			const _buf2 = _buf1.toString ( 'base64' )
+			return cb ( null, Buffer.from(_buf2+EOF) )
 		}
-		logger(colors.blue(`${ this.id } encryptStream send data`))
-		hexDebug(_buf1)
-		const _buf2 = _buf1.toString ( 'base64' )
+
+		
+		const _buf2 = Buffer.from(chunk.toString ( 'base64' ) + EOF)
+		if ( this.debug ) {
+			logger( colors.blue(`${ this.id } encryptStream got Buffer from Target【${ colors.red( this.first.toString()) }】Sent direct to Client`))
+			hexDebug(_buf2)
+		}
+		
 		return cb ( null, _buf2 )
 	}
 }
 
 export class decryptStream extends Stream.Transform {
-	private first = true
+	private first = 0
 	private salt: Buffer
 	private iv: Buffer
-	public dataCount = true
 	private derivedKey: Buffer = null
 	private decipher: crypto.Decipher = null
+	private text = ''
 
-	private _decrypt ( _buf: Buffer, CallBack ) {
+	private _decrypt ( decodeBuffer: Buffer, CallBack ) {
 		return crypto.pbkdf2 ( this.password, this.salt , 2145, 32, 'sha512', ( err, derivedKey ) => {
 			if ( err ) {
-				console.log ( `**** decryptStream crypto.pbkdf2 ERROR: ${ err.message }` )
+				logger ( colors.red(`**** decryptStream crypto.pbkdf2 ERROR: ${ err.message }` ))
 				return CallBack ( err )
 			}
 			this.derivedKey = derivedKey
@@ -240,55 +259,106 @@ export class decryptStream extends Stream.Transform {
 			try {
 				this.decipher = crypto.createDecipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
 				// @ts-ignore
-				this.decipher.setAuthTag ( _buf.slice ( 0, 16 ))
+				this.decipher.setAuthTag ( decodeBuffer.slice ( 0, 16 ))
 			} catch ( ex ) {
-				return CallBack ( new Error (`class decryptStream firstProcess crypto.createDecipheriv Error chunk [${ _buf.toString()}]`) )
+				logger(colors.red(`${ this.id } 【${this.first }】 decryptStream  crypto.setAuthTag got Error ${ ex.message }`))
+				hexDebug(decodeBuffer)
+				return CallBack ( new Error (`${ this.id } class decryptStream firstProcess crypto.createDecipheriv Error]`) )
 			}
 
 			let _Buf = null
 
 			try {
-				_Buf = Buffer.concat ([ this.decipher.update ( _buf.slice ( 16 )) , this.decipher.final () ])
-			} catch ( e ) {
-				return CallBack ( new Error (`class decryptStream firstProcess _decrypt error. chunk.length = [${ _buf.length }]`) )
+				_Buf = Buffer.concat ([ this.decipher.update ( decodeBuffer.slice ( 16 )) , this.decipher.final () ])
+			} catch ( ex ) {
+				logger(colors.red(`${ this.id } 【${this.first }】 decryptStream crypto.createDecipheriv Error ${ ex.message }`))
+				hexDebug(decodeBuffer)
+				return CallBack ( new Error (`class decryptStream firstProcess _decrypt error`) )
 			}
 
 			const length = _Buf.readUInt32BE (0) + 4
 			const uuu = _Buf.slice ( 4, length )
-			logger(colors.blue(`${ this.id } decryptStream first success!`))
-			hexDebug (uuu)
+
 			return  CallBack ( null, uuu )
 			
 		})
 	}
-	public firstProcess ( chunk: Buffer, CallBack: ( err?: Error, text?: Buffer ) => void ) {
-		if ( chunk.length < 76 ) {
+
+	public firstProcess ( decodeBuffer: Buffer, CallBack: ( err?: Error, text?: Buffer ) => void ) {
+		if ( decodeBuffer.length < 76 ) {
 			return CallBack (new Error (`Unknow connect!`))
 		}
-		this.first = false
-		this.salt = chunk.slice ( 0, 64 )
-		this.iv = chunk.slice ( 64, 76 )
-		return this._decrypt (chunk.slice ( 76 ), CallBack)
+		
+		this.salt = decodeBuffer.slice ( 0, 64 )
+		this.iv = decodeBuffer.slice ( 64, 76 )
+		return this._decrypt ( decodeBuffer.slice ( 76 ), CallBack )
 	}
 
-	constructor ( public id: string, private password: string, public upload: ( n: number ) => void ) {
+	constructor ( public id: string, private debug: boolean, private password: string, public upload: ( n: number ) => void ) {
 		super ()
 	}
 
 	public _transform ( chunk: Buffer, encode, cb ) {
-		
-			if ( this.dataCount ){
-				//console.log ( `decryptStream id [${ this.id }] dataCount = [TRUE]!`)
-			 	this.upload ( chunk.length )
+		this.text += chunk.toString()
+		const line = this.text.split('\r\n\r\n')
+
+		if ( line.length < 2 ) {
+			return cb ()
+		}
+
+		const callback = (err, data: Buffer ) => {
+			if ( err ) {
+				return cb (err)
 			}
-				
-			if ( this.first ) {
-				return this.firstProcess ( chunk, cb )
+			if (this.debug ) {
+				logger(`[${ this.id }] decryptStream  push data = [${ data.length }] 【${ colors.red(this.first.toString()) }】`) 
+				hexDebug(data)
 			}
-			const _chunk = Buffer.from(chunk.toString(), 'base64')
-			hexDebug( _chunk )
-			return this._decrypt (_chunk, cb)
+			
+			this.push (data)
+			return this._transform(Buffer.from(''), encode, cb)
+		}
+
+		const firstLine = line.shift()
 		
+		const _chunk = Buffer.from(firstLine, 'base64')
+		if ( this.debug ) {
+			logger(colors.green(`${ this.id } decryptStream got DATA ${ _chunk.length }`))
+			hexDebug(_chunk)
+		}
+		this.text = line.join('\r\n\r\n')
+		this.first ++
+
+		if ( this.first < 5 ) {
+			if ( this.first === 1) {
+
+				return this.firstProcess ( _chunk, callback )
+			}
+	
+			return this._decrypt (_chunk, callback )
+		}
+
+		return callback (null, _chunk )
+	}
+
+	public _flush (cb) {
+		
+		if ( this.text.length ) {
+			logger(colors.red(`${this.id } decryptStream on _flush [${this.text.length}]`))
+			const _chunk = Buffer.from(this.text, 'base64')
+			if (this.first < 5) {
+				return this._decrypt (_chunk, (err, data) => {
+					if ( err) {
+						return cb (err)
+					}
+					this.push (_chunk)
+					cb()
+				})
+			}
+			this.push (_chunk)
+		}
+		
+		cb()
 	}
 }
 
@@ -371,102 +441,7 @@ export class getDecryptClientStreamFromHttp extends Stream.Transform {
 	}
 }
 
-export class getDecrypGatwayStreamFromHttp extends Stream.Transform {
-
-	private text = ''
-
-	private formatErr ( text: string ) {
-		const log = 'getDecryptRequestStreamFromHttp format ERROR:\n*****************************\n' + text + '\r\n'
-		console.log ( log )
-		this.saveLog ( log )
-	}
-
-	constructor ( private saveLog: ( str: string ) => void ) { super ()}
-
-	public _transform ( chunk: Buffer, encode, cb ) {
-		
-		this.text += chunk.toString ( 'utf8' )
-		
-		const block = this.text.split ( '\r\n\r\n' )
-		
-		while ( block.length > 1 ) {
-
-			const blockText = block.shift ()
-
-			if ( ! blockText.length )
-				continue
-				
-			if ( /^GET /i.test ( blockText )) {
-				
-				const _line = blockText.split ( '\r\n' )[ 0 ]
-				
-				const _url = _line.split ( ' ' )
-				
-				if ( _url.length < 2 ) {
-					if ( block.length > 1 ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-					this.text = blockText
-					return cb ()
-				}
-				const text = Buffer.from ( _url[1].slice ( 1 ), 'base64' )
-				this.push ( text )
-				continue
-			}
-
-			if ( /^POST /i.test ( blockText )) {
-
-				if ( block.length > 0 ) {
-					const header = blockText.split ( '\r\n' )
-
-					const _length = header.findIndex ( n => {
-						return /^Content-Length: /i.test ( n )
-					})
-					
-					if ( _length === -1 ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const lengthString = header [ _length ].split ( ' ' )
-					if ( lengthString.length !== 2 ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const length = parseInt ( lengthString[ 1 ])
-					if ( ! length ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const _text = block.shift ()
-					if ( length !== _text.length ) {
-						const log = `${ blockText }\r\n\r\n${ _text }`
-						if ( block.length > 0 ) {
-							this.formatErr ( log )
-							return this.unpipe ()
-						}
-						this.text = log
-						return cb ()
-					}
-
-					this.push ( Buffer.from ( _text, 'base64' ))
-					continue
-				}
-
-				this.text = blockText
-				return cb ()
-			}
-		}
-		
-		this.text = block[0]
-		return cb ()
-	}
-}
 const tenMbyte = 10240000
-
 
 class saveBlockFile extends Stream.Writable {
 	private length = 0

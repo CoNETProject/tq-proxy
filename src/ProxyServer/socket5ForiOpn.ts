@@ -19,9 +19,13 @@ import * as Rfc1928 from './rfc1928'
 import * as res from './res'
 import * as Crypto from 'crypto'
 import { checkDomainInBlackList, isAllBlackedByFireWall } from './client'
+import httpProxyHeader from './httpProxy'
 import type { proxyServer } from './client'
 import * as Util from 'util'
-import { logger } from '../GateWay/log'
+import { logger, hexDebug } from '../GateWay/log'
+import colors from 'colors/safe'
+import { Socket } from 'dgram'
+
 
 //	socks 5 headers
 
@@ -29,9 +33,26 @@ const server_res = {
 	NO_AUTHENTICATION_REQUIRED: Buffer.from ('0500', 'hex')
 }
 
-const isSslFromBuffer = ( buffer ) => {
-	const ret = /^\x16\x03|^\x80/.test ( buffer )
+const isSslFromBuffer = ( buffer: Buffer ) => {
+	const ret = buffer[0] === 0x16 && buffer[1] === 0x03
 	return ret
+}
+
+const getHostNameFromSslConnection = ( buffer: Buffer ) => {
+	
+	if (!isSslFromBuffer(buffer)) {
+		return null
+	}
+	const lengthPoint = buffer.readInt16BE(0x95)
+	const serverName = buffer.slice (0x97, 0x97 +lengthPoint)
+	//	00000090  00 02 01 00 00 0A 00 08 00 06 00 1D 00 17 00 18  ................
+	//	use IP address
+	if (lengthPoint === 0x0A00 && serverName[0] === 0x8 && serverName[1] === 0x0) {
+		return null
+	}
+	hexDebug(serverName)
+	logger(`getHostNameFromSslConnection lengthPoint[${lengthPoint.toString(16)}] === 0x0A ${lengthPoint === 0x0A00} serverName[0] [${serverName[0].toString(16)}] serverName[0] === 0x8 ${serverName[0] === 0x8} && serverName[1] [${serverName[1].toString(16)}]  === 0x06 [${serverName[1] === 0x0}] `)
+	return serverName.toString()
 }
 
 export class socks5 {
@@ -41,11 +62,15 @@ export class socks5 {
 	public cmd: number = null
 	private _cmd = ''
 	public targetIpV4: string = null
-	public targetDomainData: domainData = null
 	private keep = false
 	private clientIP: string = this.socket.remoteAddress.split(':')[3] || this.socket.remoteAddress
-	
+	private debug = this.proxyServer.debug
+	private uuid = Crypto.randomBytes (10).toString ('hex')
 
+	private stopConnection (req: Rfc1928.Requests) {
+		req.REP = Rfc1928.Replies.COMMAND_NOT_SUPPORTED_or_PROTOCOL_ERROR
+		return this.socket.write ( req.buffer )
+	}
 	private closeSocks5 ( buffer: Buffer ) {
 		//console.log (`close proxy socket!`)
 		if ( this.socket ) {
@@ -58,95 +83,80 @@ export class socks5 {
 		}
 	}
 
-	private connectStat3 ( data: Rfc1928.Requests ) {
-		
-		const CallBack = ( err?: Error, _data?: Buffer ) => {
-			if ( err ) {
-				if ( this.proxyServer.useGatWay && _data && _data.length && this.socket.writable && this.proxyServer.gateway ) {
-					const uuuu : VE_IPptpStream = {
-						uuid: Crypto.randomBytes (10).toString ('hex'),
-						host: this.host|| this.targetIpV4,
-						buffer: _data.toString ( 'base64' ),
-						cmd: Rfc1928.CMD.CONNECT,
-						ATYP: Rfc1928.ATYP.IP_V4,
-						port: this.port,
-						ssl: isSslFromBuffer ( _data )
-					}
-					//console.log ( Util.inspect ( uuuu ))
-					//console.log (`doing gateway.requestGetWay ssl [${ uuuu.ssl }][${ uuuu.host }:${ uuuu.port }] cmd [${ uuuu.cmd }]`)
-					
-					
-					return this.proxyServer.gateway.requestGetWay ( id, uuuu, this.agent, this.socket )
-					
-				}
-				console.log (`SOCK5 ! this.proxyServer.gateway STOP socket`)
-				return this.socket.end ( res.HTTP_403 )
+	private connectStat3 ( req: Rfc1928.Requests ) {
+		let userAgent = ''
+		switch (req.cmd) {
+			case Rfc1928.CMD.CONNECT: {
+				break
 			}
-			return
+			case Rfc1928.CMD.BIND: {
+			}
+			case Rfc1928.CMD.UDP_ASSOCIATE: {
+			}
+			default: {
+				return this.stopConnection(req)
+			}
+		}
+		const uuuu : VE_IPptpStream = {
+			uuid: this.uuid,
+			host: req.host,
+			hostIPAddress: req.hostAddress,
+			buffer: '',
+			cmd: this._cmd,
+			port: req.port,
+			ssl: false
+		}
+		const requestObj: requestObj = {
+			remotePort:　this.socket.remotePort,
+			remoteAddress: this.socket.remoteAddress,
+			targetHost: uuuu.host,
+			targetPort: uuuu.port,
+			methods: '',
+			socks: 'Sock5',
+			uuid: uuuu.uuid
 		}
 
 		this.socket.once ( 'data', ( _data: Buffer ) => {
+
 			//			gateway shutdown
 			if ( !this.proxyServer.gateway ) {
 				//console.log (`SOCK5 !this.proxyServer.gateway STOP sokcet! res.HTTP_403`)
 				return this.socket.end ( res._HTTP_PROXY_302() )
 			}
-			tryConnectHost ( this.host || this.targetIpV4 , this.targetDomainData, this.port, _data, this.socket, false, this.proxyServer.checkAgainTimeOut, 
-				this.proxyServer.connectHostTimeOut, this.proxyServer.useGatWay, CallBack )
-		})
-		data.REP = Rfc1928.Replies.GRANTED
-		return this.socket.write ( data.buffer )
-	}
-
-	private connectStat2_after ( retBuffer: Rfc1928.Requests ) {
-
-		if ( this.ATYP === Rfc1928.ATYP.DOMAINNAME ) {
-			this.targetDomainData = this.proxyServer.domainListPool.get ( this.host )
-		} else {
-			this.targetDomainData = { dns: [{ family: 4, address: this.targetIpV4, expire: null, connect: [] }], expire: null }
-		}
-
-		//			gateway shutdown
-		if ( !this.proxyServer.gateway ) {
-			return this.connectStat3 ( retBuffer )
-		}
-		return checkDomainInBlackList ( this.proxyServer.domainBlackList, this.host || this.targetIpV4, ( err, result: boolean ) => {
-			if ( result ) {
-				console.log ( `host [${ this.host }] Blocked!`)
-				retBuffer.REP = Rfc1928.Replies.CONNECTION_NOT_ALLOWED_BY_RULESET
-				return this.closeSocks5 ( retBuffer.buffer )
+			if ( this.debug ) {
+				logger(`connectStat3 buffer`)
+				hexDebug(_data)
 			}
-			if ( this.host && !this.proxyServer.useGatWay ) {
-				return isAllBlackedByFireWall ( this.host, false, this.proxyServer.gateway, this.agent, this.proxyServer.domainListPool, ( err, _hostIp ) => {
-					if ( err ) {
-						console.log ( `host [${ this.host }] Blocked!`)
-						retBuffer.REP = Rfc1928.Replies.CONNECTION_NOT_ALLOWED_BY_RULESET
-						return this.closeSocks5 ( retBuffer.buffer )
-					}
+			uuuu.ssl = isSslFromBuffer (_data)
+
+			if (!uuuu.ssl) {
+				const httpHeader = new httpProxyHeader (_data)
+				uuuu.host = httpHeader.host
+				userAgent = httpHeader.headers [ 'user-agent' ]
+				requestObj.methods = httpHeader.methods
+			}
+
+			uuuu.buffer = _data.toString ( 'base64' )
+			if ( this.debug ) {
+				logger(Util.inspect(uuuu))
+				logger(Util.inspect(requestObj))
+			}
+			return this.proxyServer.gateway.requestGetWay ( requestObj, uuuu, userAgent, this.socket )
+		})
+		req.REP = Rfc1928.Replies.GRANTED
+		return this.socket.write ( req.buffer )
+	}
 	
-					if ( ! _hostIp ) {
-						console.log ( 'isAllBlackedByFireWall back no _hostIp' )
-						retBuffer.REP = Rfc1928.Replies.HOST_UNREACHABLE
-						return this.closeSocks5 ( retBuffer.buffer )
-					}
-
-					this.proxyServer.domainListPool.set ( this.host, _hostIp )
-					this.targetDomainData = _hostIp
-					return this.connectStat3 ( retBuffer )
-				})
-			}
-			return this.connectStat3 ( retBuffer )
-			
-		})
-	}
-	/*
 	private udpProcess ( data: Rfc1928.Requests ) {
 		data.REP = Rfc1928.Replies.GRANTED
 		return this.socket.write ( data.buffer )
 	}
-	*/
+	
 	private connectStat2 ( data: Buffer ) {
 
+		if ( this.debug ) {
+			hexDebug(data)
+		}
 		const req = new Rfc1928.Requests ( data )
 
 		this.ATYP = req.ATYP
@@ -158,27 +168,26 @@ export class socks5 {
 		//.serverIP = this.socket.localAddress.split (':')[3]
 
 		//		IPv6 not support!
-		const obj = { ATYP:this.ATYP, host: this.host, hostType: typeof  this.host, port: this.port, targetIpV4: this.targetIpV4 , cmd: this._cmd, buffer: data.toString('hex') }
+		
 		switch ( this.cmd ) {
 
 			case Rfc1928.CMD.CONNECT: {
 				
 				this.keep = true
-				this._cmd = obj.cmd = 'CONNECT'
+				this._cmd = 'CONNECT'
 				break
 			}
 			case Rfc1928.CMD.BIND: {
-				this._cmd = obj.cmd = 'CONNECT'
+				this._cmd = 'BIND'
 				break
 			}
 			case Rfc1928.CMD.UDP_ASSOCIATE: {
-				this.keep = true
-				this._cmd = obj.cmd = 'CONNECT'
+				this._cmd = 'UDP_ASSOCIATE'
 				//logger( `Rfc1928.CMD.UDP_ASSOCIATE data[${ data.toString ('hex')}]` )
 				break
 			}
 			default: {
-				this._cmd = obj.cmd = 'UNKNOW'
+				this._cmd = 'UNKNOW'
 				logger (`Socks 5 unknow cmd: `, data.toString('hex'), Util.inspect(req, false, 3, true))
 				break
 			}
@@ -186,24 +195,29 @@ export class socks5 {
 		}
 
 		//			IPv6 not support 
-		if ( req.IPv6 ) {
-			this.keep = false
-		}
+		// if ( req.IPv6 ) {
+		// 	this.keep = false
+		// }
+		const obj = { ATYP:this.ATYP, host: this.host, hostType: typeof  this.host, port: this.port, targetIpV4: this.targetIpV4 , cmd: this._cmd, buffer: data.toString('hex') }
 		if ( ! this.keep ) {
-			logger (``)
 			req.REP = Rfc1928.Replies.COMMAND_NOT_SUPPORTED_or_PROTOCOL_ERROR
-			logger ('close socks 5 connect', obj )
+			if ( this.debug ) {
+				logger(colors.red(`Rfc1928.Replies.COMMAND_NOT_SUPPORTED_or_PROTOCOL_ERROR STOP socks 5 connecting.`))
+				logger(Util.inspect(obj))
+			}
 			return this.closeSocks5 ( req.buffer )
 		}
 		if ( this.cmd === Rfc1928.CMD.UDP_ASSOCIATE ) {
 			return logger ('this.cmd === Rfc1928.CMD.UDP_ASSOCIATE skip!')
 		}
-		logger ('keep sock5 connect', obj)
-		return this.connectStat2_after ( req )
+		return this.connectStat3 (req)
 	}
 
-	constructor ( private socket: Net.Socket,private agent: string, private proxyServer: proxyServer ) {
-		//console.log (`new socks 5`)
+	constructor ( private socket: Net.Socket, private data: Buffer, private agent: string, private proxyServer: proxyServer ) {
+		if ( this.debug ) {
+			logger (colors.yellow(`new socks v5`))
+			hexDebug(data)
+		}
 		this.socket.once ( 'data', ( chunk: Buffer ) => {
 			return this.connectStat2 ( chunk )
 		})
@@ -216,119 +230,133 @@ export class sockt4 {
 	private req = new Rfc1928.socket4Requests ( this.buffer )
 	private host = this.req.domainName
 	private port = this.req.port
+	private uuid = Crypto.randomBytes (10).toString ('hex')
 	private cmd = this.req.cmd
 	private _cmd = ''
 	private targetIpV4 = this.req.targetIp
-	private targetDomainData: domainData = null
-	private clientIP = this.socket
 	private keep = false
+	private debug = false
+	private id = colors.blue(`[${ this.uuid}] [${ this.socket.remoteAddress}:${this.socket.remotePort}] --> [${ this.host}:${ this.port}]`)
 	constructor ( private socket: Net.Socket, private buffer: Buffer, private agent: string, private proxyServer: proxyServer ) {
-		console.log (`new socks 4`)
+		this.debug = proxyServer.debug
+		this.socket.pause ()
+
+		if ( this.debug ) {
+			logger (colors.yellow(`new socks v4`))
+			hexDebug(buffer)
+		}
+		
 		switch ( this.cmd ) {
 			case Rfc1928.CMD.CONNECT: {
 				this.keep = true
 				this._cmd = 'CONNECT'
+				if ( this.debug ) {
+					logger(colors.gray(`${ this.id} sockt4 got Rfc1928 command ${colors.magenta('CONNECT')}`))
+				}
 				break
 			}
 			case Rfc1928.CMD.BIND: {
-				console.log ( 'establish a TCP/IP port binding' )
-				console.log ( this.req.buffer.toString('hex'))
+				
 				this._cmd = 'BIND'
+				if ( this.debug ) {
+					logger(colors.gray(`${ this.id} sockt4 got Rfc1928 command ${colors.magenta('BIND')}`))
+				}
 				break
 			}
 			case Rfc1928.CMD.UDP_ASSOCIATE: {
-				console.log ( 'associate a UDP port')
-				console.log ( this.req.buffer.toString('hex') )
+				if ( this.debug ) {
+					logger(colors.gray(`${ this.id} sockt4 got Rfc1928 command ${colors.magenta('UDP_ASSOCIATE')}`))
+				}
 				this._cmd = 'UDP_ASSOCIATE'
 				break
 			}
-			default:{
+			default: {
+				logger(colors.red(`${ this.id } sockt4 got Rfc1928 unknow command [${ this.cmd }]`))
+				
 				this._cmd = 'UNKNOW'
 				break
 			}
 				
 		}
 		if ( ! this.keep ) {
+			this.debug ? logger (colors.red(`STOP session`)): null
 			this.socket.end ( this.req.request_failed )
 			return
 		}
-		this.socket.pause ()
-		this.connectStat1 ()
+
+		this.connectStat2 ()
 
 	}
 	public connectStat2 () {
-		const CallBack = ( err?: Error, _data?: Buffer ) => {
-			if ( err ) {
-				const httpHead = new HttpProxyHeader ( buffer )
-				if ( this.proxyServer.useGatWay && _data && _data.length && this.socket.writable && this.proxyServer.gateway ) {
-					const uuuu : VE_IPptpStream = {
-						uuid: Crypto.randomBytes (10).toString ('hex'),
-						host: this.host || this.targetIpV4 ,
-						buffer: _data.toString ( 'base64' ),
-						cmd: httpHead.command,
-						ATYP: Rfc1928.ATYP.IP_V4,
-						port: this.port,
-						ssl: isSslFromBuffer ( _data )
-					}
-					const id = `[${ this.clientIP }:${ this.port }][${ uuuu.uuid }] `
-					return this.proxyServer.gateway.requestGetWay ( id, uuuu, this.agent, this.socket )
-				}
-				console.log (`SOCK4 connectStat2 this.proxyServer.gateway === null`)
-				return this.socket.end ( res.HTTP_403 )
-			}
-			return
-		}
 
 		this.socket.once ( 'data', ( _data: Buffer ) => {
-			console.log (`connectStat2 [${ this.host||this.targetIpV4 }]get data `)
-			if ( !this.proxyServer.gateway ) {
-				console.log (`SOCK4 !this.proxyServer.gateway STOP sokcet! res.HTTP_403`)
-				this.socket.end ( res._HTTP_PROXY_302 () )
+			if ( this.debug ) {
+				logger (`SOCK4 connectStat2 [${ this.host || this.targetIpV4 }] get data`)
+				hexDebug(_data)
 			}
-			tryConnectHost ( this.host, this.targetDomainData, this.port, _data, this.socket, false, this.proxyServer.checkAgainTimeOut, 
-				this.proxyServer.connectHostTimeOut, this.proxyServer.useGatWay, CallBack )
+			
+
+			if ( !this.proxyServer.gateway ) {
+				logger ( colors.red(`SOCK4 !this.proxyServer.gateway STOP sokcet! res.HTTP_403`))
+				return this.socket.end ( res._HTTP_PROXY_302 () )
+			}
+
+			this.connect (_data)
+
 		})
-		const buffer = this.req.request_4_granted ( !this.host ? null: this.targetDomainData.dns[0].address, this.port )
+		const buffer = this.req.request_4_granted ( '0.0.0.255', this.port )
 		this.socket.write ( buffer )
 		return this.socket.resume ()
 	}
-	public connectStat1 () {
-		if ( this.host ) {
-			this.targetDomainData = this.proxyServer.domainListPool.get ( this.host )
+
+	public connect ( buffer: Buffer) {
+		
+		const isSsl = isSslFromBuffer ( buffer )
+		let userAgent = ''
+		let methods = 'GET'
+		let httpHeader: httpProxyHeader = null
+		const uuuu : VE_IPptpStream = {
+			uuid: this.uuid,
+			host: this.host,
+			hostIPAddress: this.req.targetIp,
+			buffer: buffer.toString ( 'base64' ),
+			cmd: this._cmd,
+			port: this.req.port,
+			ssl: isSslFromBuffer ( buffer )
 		}
-		//		gateway server shutdoan
-		if ( !this.proxyServer.gateway ) {
-			return this.connectStat2 ()
+		
+		if (!isSsl) {
+			httpHeader = new httpProxyHeader (buffer)
+			uuuu.host = httpHeader.host
+			userAgent = httpHeader.headers [ 'user-agent' ]
+			methods = httpHeader.methods
 		}
-		return checkDomainInBlackList ( this.proxyServer.domainBlackList, this.host || this.targetIpV4, ( err, result: boolean ) => {
-			if ( result ) {
-				console.log ( `[${ this.host }] Blocked!`)
-				return this.socket.end ( this.req.request_failed )
-			}
-			if ( this.host && !this.proxyServer.useGatWay ) {
-				console.log (`socks4 host [${ this.host }]`)
-				return isAllBlackedByFireWall ( this.host, false, this.proxyServer.gateway, this.agent, this.proxyServer.domainListPool, ( err, _hostIp ) => {
-					if ( err ) {
-						console.log ( `[${ this.host }] Blocked!`)
-						return this.socket.end ( this.req.request_failed )
-					}
-	
-					if ( ! _hostIp ) {
-						console.log ( 'isAllBlackedByFireWall back no _hostIp' )
-						return this.socket.end ( this.req.request_failed )
-					}
-					
-					this.proxyServer.domainListPool.set ( this.host, _hostIp )
-					this.targetDomainData = _hostIp
-					return this.connectStat2 ()
-				})
-			}
-			console.log ( `socks4 ipaddress [${ this.targetIpV4 }]`)
-			return this.connectStat2 ()
+		
+		const requestObj: requestObj = {
+			remotePort:　this.socket.remotePort,
+			remoteAddress: this.socket.remoteAddress,
+			targetHost: uuuu.host,
+			targetPort: uuuu.port,
+			methods: httpHeader ? httpHeader.methods : 'CONNECT',
+			socks: this.req.targetIp ? 'Sock4' : 'Sock4a',
+			uuid: uuuu.uuid
+		}
+
+		if ( this.debug ) {
+			logger(Util.inspect (uuuu, false, 3, true ))
+			logger(Util.inspect (requestObj, false, 3, true ))
+		}
+
+		if ( this.proxyServer.gateway && typeof this.proxyServer.gateway.requestGetWay === 'function' ) {
 			
-		})
+			return this.proxyServer.gateway.requestGetWay ( requestObj, uuuu, userAgent, this.socket )
+		}
+
+		return 　this.socket.end ( this.req.request_failed )
 	}
 }
+
+
 /*
 export class UdpDgram {
 	private server: Dgram.Socket = null

@@ -81,10 +81,8 @@ Content-Length: 300
 ${ body_403 }
 
 `
-export const _HTTP_PROXY_200 = `HTTP/1.1 200 Connection Established
-Content-Type: text/html; charset=UTF-8
-
-`
+export const _HTTP_PROXY_200 = 
+	'HTTP/1.1 200 Connection Established\r\n\r\n'
 
 const getLocalServerIPAddress = () => {
 	const nets = Os.networkInterfaces()

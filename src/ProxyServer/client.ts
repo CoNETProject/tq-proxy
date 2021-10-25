@@ -26,7 +26,7 @@ import * as Path from 'path'
 import * as Socks from './socket5ForiOpn'
 import gateWay from './gateway'
 import * as Os from 'os'
-import { logger } from '../GateWay/log'
+import { hexDebug, logger } from '../GateWay/log'
 import colors from 'colors/safe'
 import { inspect } from 'util'
 
@@ -226,14 +226,16 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, 
 	const httpHead = new HttpProxyHeader ( buffer )
 	const hostName = httpHead.host
 	const userAgent = httpHead.headers [ 'user-agent' ]
+
+
 	const connect = ( _, _data?: Buffer ) => {
 		const uuuu : VE_IPptpStream = {
 			uuid: Crypto.randomBytes (10).toString ('hex'),
 			host: hostName,
 			hostIPAddress: httpHead.hostIpAddress,
 			buffer: _data.toString ( 'base64' ),
-			cmd: httpHead.command,
-			ATYP: Rfc1928.ATYP.IP_V4,
+			cmd: httpHead.methods,
+			//ATYP: Rfc1928.ATYP.IP_V4,
 			port: httpHead.Port,
 			ssl: isSslFromBuffer ( _data )
 		}
@@ -243,7 +245,7 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, 
 			remoteAddress: clientSocket.remoteAddress.split(':')[3],
 			targetHost: hostName,
 			targetPort: httpHead.Port,
-			methods: httpHead.command,
+			methods: httpHead.methods,
 			uuid: uuuu.uuid
 		}
 
@@ -258,7 +260,7 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, 
 		}
 		console.log (colors.red(`httpProxy _gatway have no ready!`))
 		return closeClientSocket(clientSocket)
-	}	
+	}
 
 	if ( httpHead.isConnect ) {
 		return getSslConnectFirstData ( clientSocket, buffer, true, connect )
@@ -266,6 +268,28 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, 
 	return connect (null, buffer )
 	
 
+}
+
+const httpProxyLocal = ( clientSocket: Net.Socket, buffer: Buffer ) => {
+	const httpHead = new HttpProxyHeader ( buffer )
+	const id = ` ${httpHead.host}:${httpHead.Port}`
+	logger(colors.blue(`Connect to ${id}`))
+	const connect = (_, _buffer) => {
+		const connect = Net.connect ({ port: httpHead.Port, host: httpHead.host }, () => {
+			connect.pipe (clientSocket).pipe (connect)
+
+			connect.write (buffer)
+			clientSocket.resume()
+		})
+		connect.once('error', err => {
+			logger(colors.red( `${id} connect.once('error') error=${ err.message }`))
+		})
+	}
+
+	if (httpHead.isConnect) {
+		return getSslConnectFirstData ( clientSocket, buffer, true, connect )
+	}
+	return connect (null, buffer )
 }
 
 /*
@@ -400,20 +424,22 @@ export class proxyServer {
 					
 					switch ( data.readUInt8 ( 0 )) {
 
-						case 0x4:
+						case 0x4: {
 							return socks = new Socks.sockt4 ( socket, data, agent, this )
-						case 0x5:
-							logger (`socket.once 0x05`, colors.blue(data.toString('hex')))
-							return socks = new Socks.socks5 ( socket, agent, this )
-						default:
+						}
 							
+						case 0x5: {
+							return socks = new Socks.socks5 ( socket, data, agent, this )
+						}
+							
+						default: {
 							return httpProxy ( socket, data, this.gateway, this.debug )
+						}
 					}
 				})
 
 				socket.on ( 'error', err => {
 					socks = null
-					//console.log ( `[${ip}] socket.on error`, err.message )
 				})
 
 				socket.once ( 'end', () => {
@@ -424,20 +450,20 @@ export class proxyServer {
 			})
 
 			this.server.on ( 'error', err => {
-				console.log ( 'proxy server :', err )
+				logger ( colors.red(`proxy server : ${ err.message }` ))
 				
 			})
 
 			this.server.maxConnections = 65536
 
 			this.server.listen ( proxyPort, () => {
-				return console.log ( 'proxy start success on port :', proxyPort  )
+				return logger ( colors.blue(`proxy start success on port : [${ proxyPort }]`))
 			})
 
 		}
 
 	public exit () {
-		console.log (`************ proxyServer on exit ()`)
+		logger ( colors.red(`************ proxyServer on exit ()`))
 		this.gateway = null
 	}
 
