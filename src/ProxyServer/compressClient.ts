@@ -352,6 +352,7 @@ export class getDecryptClientStreamHttp extends Transform {
 		if ( line.length < 2 ) {
 			return cb()
 		}
+
 		if (this.debug){
 			logger(colors.gray(this.text))
 		}
@@ -376,9 +377,23 @@ export class getDecryptClientStreamHttp extends Transform {
 		const _block = Buffer.from ( currentBlock, 'base64' )
 		if ( this.debug ) {
 			logger (colors.blue(`${ this.id } getDecryptClientStreamHttp <--- from Gateway [${ chunk.length }] 【${colors.red( this.first.toString() )}】`))
-			hexDebug (_block)
+			logger (colors.yellow(currentBlock))
 		}
-		return cb (null, _block)
+		this.push(_block)
+		return this._transform(Buffer.from(''), encode, cb)
+	}
+
+	public _flush (cb) {
+		if ( this.text.length ) {
+			const _block = Buffer.from ( this.text, 'base64' )
+			
+			logger(colors.red(`${this.id} getDecryptClientStreamHttp on _flush`))
+			if (this.debug ) {
+				logger (colors.yellow(_block.toString()))
+			}
+			this.push(_block)
+		}
+		cb()
 	}
 }
 
@@ -408,230 +423,5 @@ export class blockBuffer16 extends Writable {
 		}
 		console.log ( 'blockBuffer16 socket.writable false')
 		return cb ()
-	}
-}
-
-export class getDecrypGatwayStreamFromHttp extends Transform {
-
-	private text = ''
-	private formatErr ( text: string ) {
-		const log = 'getDecryptRequestStreamFromHttp format ERROR:\n*****************************\n' + text + '\r\n'
-		console.log ( log )
-		this.saveLog ( log )
-	}
-	constructor ( private saveLog: ( str: string ) => void ) { super ()}
-
-	public _transform ( chunk: Buffer, encode, cb ) {
-
-		this.text += chunk.toString ( 'utf8' )
-		const block = this.text.split ( '\r\n\r\n' )
-
-		while ( block.length ) {
-
-			const blockText = block.shift ()
-
-			if ( ! blockText.length )
-				continue
-			
-			if ( /^GET /i.test ( blockText )) {
-
-				const _line = blockText.split ( '\r\n' )[ 0 ]
-				const _url = _line.split ( ' ' )
-				if ( _url.length < 2 ) {
-					if ( block.length ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-					this.text = blockText
-					return cb ()
-				}
-				this.push ( Buffer.from ( _url[1].slice ( 1 ), 'base64' ))
-				continue
-			}
-
-			if ( /^POST /i.test ( blockText )) {
-
-				if ( block.length > 0 ) {
-					const header = blockText.split ( '\r\n' )
-
-					const _length = header.findIndex ( n => {
-						return /^Content-Length: /i.test ( n )
-					})
-					if ( _length === -1 ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const lengthString = header [ _length ].split ( ' ' )
-					if ( lengthString.length !== 2 ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const length = parseInt ( lengthString[ 1 ])
-					if ( ! length ) {
-						this.formatErr ( blockText )
-						return this.unpipe ()
-					}
-
-					const _text = block.shift ()
-					if ( length !== _text.length ) {
-						const log = `${ blockText }\r\n\r\n${ _text }`
-						if ( block.length > 0 ) {
-							this.formatErr ( log )
-							return this.unpipe ()
-						}
-						this.text = log
-						return cb ()
-					}
-
-					this.push ( Buffer.from ( _text, 'base64' ))
-					continue
-				}
-
-				this.text = blockText
-				return cb ()
-			}
-
-			if ( blockText.length ) {
-				if ( block.length ) {
-					this.formatErr ( blockText )
-					return this.unpipe ()
-					
-				}
-				this.text = blockText
-				return cb ()
-			}
-		}
-
-		this.text = ''
-		return cb ()
-	}
-}
-
-
-
-export class SencryptStream extends Transform {
-	private salt: Buffer
-	private iv: Buffer
-	public ERR: Error = null
-	private first = true
-	public derivedKey: Buffer = null
-
-	private BlockBuffer ( _buf: Buffer ) {
-		return Buffer.from( _buf.length.toString( 16 ).toUpperCase() + '\r\n', 'utf8' )
-	}
-
-	constructor ( private password: string, private random: number, private httpHeader : ( str: string ) => Buffer, CallBack ) {
-		super ()
-		waterfall ([
-			next => randomBytes ( 64, next ),
-			( _salt, next ) => {
-				this.salt = _salt
-				randomBytes ( 12, next )
-			},
-			( _iv, next ) => {
-				this.iv = _iv
-				pbkdf2 ( password, this.salt, 2145, 32, 'sha512', next )
-			}
-		], ( err, derivedKey ) => {
-			if ( err ) 
-				return this.ERR = err
-			this.derivedKey = derivedKey
-			return CallBack ( err )
-		})
-	}
-	
-	public _transform ( chunk: Buffer, encode, cb ) {
-
-		const cipher = createCipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
-
-		let _text = Buffer.concat ([ Buffer.alloc ( 4, 0 ) , chunk ])
-
-		_text.writeUInt32BE ( chunk.length, 0 )
-
-		if ( chunk.length < this.random ) {
-			_text = Buffer.concat ([ _text, Buffer.allocUnsafe ( Math.random() * 1000 )])
-		}
-
-		const _buf = Buffer.concat ([ cipher.update ( _text ), cipher.final ()])
-		const _buf1 = Buffer.concat ([ cipher.getAuthTag (), _buf ])
-
-		if ( this.first ) {
-			this.first = false
-			const black = Buffer.concat ([ this.salt, this.iv, _buf1 ]).toString ( 'base64' )
-			if ( ! this.httpHeader ) {
-				const _buf4 = Buffer.from ( black, 'utf8')
-				return cb ( null, Buffer.concat ([ HTTP_HEADER, this.BlockBuffer ( _buf4 ), _buf4, EOF ]))
-			}
-				
-			return cb ( null, this.httpHeader ( black ))
-
-		}
-		
-		const _buf2 = _buf1.toString ( 'base64' )
-
-		const _buf3 = Buffer.from ( _buf2, 'utf8' )
-		return cb ( null, Buffer.concat ([ this.BlockBuffer ( _buf3 ), _buf3, EOF ]))
-	}
-}
-
-export class SdecryptStream extends Transform {
-	private first = true
-	private salt: Buffer
-	private iv: Buffer
-
-	private derivedKey: Buffer
-	private decipher: Decipher
-
-	public firstProcess (  chunk: Buffer, CallBack: ( err?: Error, text?: Buffer ) => void ) {
-
-		this.first = false
-		this.salt = chunk.slice ( 0, 64 );
-		this.iv = chunk.slice ( 64, 76 );
-		return pbkdf2 ( this.password, this.salt , 2145, 32, 'sha512', ( err, derivedKey ) => {
-			if ( err ) {
-				console.log ( `decryptStream crypto.pbkdf2 ERROR: ${ err.message }` )
-				return CallBack ( err )
-			}
-			this.derivedKey = derivedKey
-			const _buf = chunk.slice ( 76 )
-			this.decipher = createDecipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
-			// @ts-ignore
-			this.decipher.setAuthTag ( _buf.slice ( 0, 16 ))
-			try {
-			const _Buf = Buffer.concat ([ this.decipher.update ( _buf.slice ( 16 )) , this.decipher.final () ])
-			const uuu = _Buf.slice ( 4 )
-
-			return  CallBack ( null, uuu )
-			} catch ( e ) {
-				console.log ( 'class decryptStream firstProcess _decrypt error:', e.message )
-				return CallBack ()
-			}
-		})
-	}
-
-	constructor ( private password: string ) {
-		
-		super ()
-		console.log ( `create new decryptStream with password: [${ password }]`)
-	}
-
-	public _transform ( chunk: Buffer, encode, cb ) {
-				
-			if ( this.first ) {
-				return this.firstProcess ( chunk, cb )
-			}
-			this.decipher = createDecipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
-			// @ts-ignore
-			this.decipher.setAuthTag ( chunk.slice ( 0, 16 ))
-			try {
-				const _Buf = Buffer.concat ([ this.decipher.update ( chunk.slice ( 16 )) , this.decipher.final () ])
-				return cb ( null, _Buf.slice( 4 ))
-			} catch ( e ) {
-				console.log ( 'class decryptStream _decrypt error:', e.message )
-				return cb ()
-			}
-		
 	}
 }

@@ -340,6 +340,26 @@ export class decryptStream extends Stream.Transform {
 
 		return callback (null, _chunk )
 	}
+
+	public _flush (cb) {
+		
+		if ( this.text.length ) {
+			logger(colors.red(`${this.id } decryptStream on _flush [${this.text.length}]`))
+			const _chunk = Buffer.from(this.text, 'base64')
+			if (this.first < 5) {
+				return this._decrypt (_chunk, (err, data) => {
+					if ( err) {
+						return cb (err)
+					}
+					this.push (_chunk)
+					cb()
+				})
+			}
+			this.push (_chunk)
+		}
+		
+		cb()
+	}
 }
 
 class encode extends Stream.Transform {
