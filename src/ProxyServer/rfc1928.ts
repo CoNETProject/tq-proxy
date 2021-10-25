@@ -93,12 +93,6 @@
 					 public get IsSocket5 () {
 						 return this.buffer.readUInt8 ( 0 ) === 0x05
 					 }
-					 public get NMETHODS () {
-						 return this.buffer.readUInt8 ( 1 )
-					 }
-					 public get METHODS () {
-						 return this.buffer.readUInt8 ( 2 )
-					 }
 					 public get isRequests () {
 						 return this.buffer.length > 3
 					 }
@@ -122,8 +116,10 @@
 					 }
 				 
 					 public get ATYP_IP4Address () {
-						 if ( this.ATYP !== ATYP.IP_V4 )
-							 return null
+						 if ( this.ATYP !== ATYP.IP_V4 ) {
+							return null
+						 }
+							 
 						 return `${ this.buffer.readUInt8 (4).toString() }.${ this.buffer.readUInt8 (5).toString() }.${ this.buffer.readUInt8 (6).toString() }.${ this.buffer.readUInt8 (7).toString() }`
 					 }
 				 
@@ -132,8 +128,10 @@
 							 const length = this.buffer.readUInt8 ( 4 )
 							 return this.buffer.readUInt16BE ( 5 + length )
 						 }
-						 if ( this.ATYP === ATYP.IP_V6 )
-							 return this.buffer.readUInt16BE ( 19 )
+						 if ( this.ATYP === ATYP.IP_V6 ) {
+							return this.buffer.readUInt16BE ( 19 )
+						 }
+							 
 						 return this.buffer.readUInt16BE ( 8 )
 					 }
 				 
@@ -167,9 +165,13 @@
 					 public set REP ( n: number ) {
 						 this.buffer.writeUInt8 ( n, 1 )
 					 }
+
+					 public get hostAddress () {
+						 return this.ATYP_IP4Address || this.IPv6
+					 }
 				 
 					 public get host () {
-						 return this.ATYP_IP4Address || this.domainName || this.IPv6
+						 return this.domainName || this.IPv6 || this.ATYP_IP4Address
 					 }
 			
 					 public set port ( port: number ) {
@@ -206,8 +208,10 @@
 				   }
 			
 				   public request_4_granted ( targetIp: string, targetPort: number) {
-					   if ( !targetIp )
-						   return Buffer.from ('005a000000000000','hex')
+					   if ( !targetIp ) {
+						  return Buffer.from ('005a000000000000','hex')
+					   }
+						   
 					   const ret = Buffer.from ('005a000000000000','hex')
 					   ret.writeUInt16BE ( targetPort, 2 )
 					   const u = targetIp.split ('.')
@@ -217,6 +221,7 @@
 					   }
 					   return ret
 				   }
+
 				   public get request_failed () {
 					   return Buffer.from ('005b000000','hex')
 				   }

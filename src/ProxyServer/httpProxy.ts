@@ -73,7 +73,7 @@ export default class httpProxy {
 		return ( /^connect|^get|^put|^delete|^post|^OPTIONS|^HEAD|^TRACE/i.test ( this.commandWithLine[0] ))
 	}
 
-	get command () {
+	get methods () {
 		return this.commandWithLine[0].split(' ')[0]
 	}
 

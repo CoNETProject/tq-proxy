@@ -36,6 +36,7 @@ const otherRequestForNet = ( path: string, host: string, port: number, UserAgent
 				`User-Agent: ${ UserAgent ? UserAgent : 'Mozilla/5.0' }\r\n\r\n`
 	return 	`POST /${ Crypto.randomBytes ( 10 + Math.round ( Math.random () * 1500 )).toString ( 'base64')} HTTP/1.1\r\n` +
 			`Host: ${ host }${ port !== 80 ? ':'+ port : '' }\r\n` +
+			`User-Agent: ${ UserAgent ? UserAgent : 'Mozilla/5.0' }\r\n\r\n` +
 			`Content-Length: ${ path.length }\r\n\r\n` +
 			path + '\r\n\r\n'
 }
@@ -69,7 +70,7 @@ export default class gateWay {
 	
 	
 	private request ( str: string, gateway: IConnectCommand ) {
-		return Buffer.from ( otherRequestForNet ( str, gateway.gateWayIpAddress, gateway.gateWayPort, this.userAgent ), 'utf8' )
+		return Buffer.from ( otherRequestForNet ( str, gateway.gateWayIpAddress, gateway.gateWayPort, this.userAgent ))
 	}
 
 	private getCurrentGateway () {
@@ -90,12 +91,14 @@ export default class gateWay {
 
 		const _data = Buffer.from ( JSON.stringify ({ hostName: hostName }))
 		const gateway = this.getCurrentGateway ()
-		const encrypt = new Compress.encryptStream ( gateway.randomPassword, 3000, ( str: string ) => {
+		const id = colors.blue(`hostLookup`)
+		const encrypt = new Compress.encryptStream ( id, gateway.randomPassword, 3000, ( str: string ) => {
 			return this.request ( str, gateway )
 		}, this.debug )
 		
 		const finish = new hostLookupResponse ( CallBack )
-		const httpBlock = new Compress.getDecryptClientStreamFromHttp ()
+		
+		const httpBlock = new Compress.getDecryptClientStreamHttp ( this.debug, id )
 		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
 		
 		logger (`try connect gateway server: [${ gateway.gateWayIpAddress }:${ gateway.gateWayPort }] password[${ gateway.randomPassword }]`)
@@ -142,14 +145,21 @@ export default class gateWay {
 			return socket.end ( res._HTTP_404 )
 		}
 
+		const id = colors.blue(`[${uuuu.uuid}]${uuuu.host}:${uuuu.port}`)
+		
 		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
-		const encrypt = new Compress.encryptStream ( gateway.randomPassword, 3000, ( str: string ) => {
+		const encrypt = new Compress.encryptStream ( id, gateway.randomPassword, Math.random()*500, ( str: string ) => {
 			return this.request ( str, gateway )
 		}, this.debug )
 
-		const httpBlock = new Compress.getDecryptClientStreamFromHttp ()
+		const httpBlock = new Compress.getDecryptClientStreamHttp ( this.debug, id )
 
 		httpBlock.once ( 'error', err => {
+			socket.end ( res._HTTP_404 )
+		})
+
+		decrypt.once ('error', err => {
+			logger(colors.red(``))
 			socket.end ( res._HTTP_404 )
 		})
 
@@ -162,33 +172,51 @@ export default class gateWay {
 			console.log (`encrypt.once error`, err )
 			socket.end ( res._HTTP_404 )
 		})
+		if (this.debug ) {
+			logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}:${ gateway.gateWayPort }] for [${ inspect( requestObj, false, 3, true ) }]`))
+			hexDebug(Buffer.from(uuuu.buffer, 'base64'))
+		}
 
-		logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}] for [${ inspect( requestObj, false, 3, true ) }]`))
-		const _socket = Net.createConnection ( gateway.gateWayPort || 80, gateway.gateWayIpAddress, () => {
-			if ( encrypt && encrypt.writable ) {
-				hexDebug (Buffer.from(uuuu.buffer, 'base64'))
-				return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ), () => {
-					socket.resume()
-				})
-				
+		const connect = () => {
+			if ( !encrypt.writable ) {
+				return setTimeout(() => {
+					logger(`!encrypt.writable waiting 200ms`, inspect(requestObj, false, 3, true))
+					return connect()
+				}, 200)
 			}
-			console.log (inspect (requestObj))
-			logger( colors.red(`encryptStream writable false!`))
-			return socket.end ( res._HTTP_404 )
-			
-		})
+			const _socket = Net.createConnection ( gateway.gateWayPort || 80, gateway.gateWayIpAddress, () => {
+				if ( encrypt && encrypt.writable ) {
+					if (this.debug ) {
+						logger(`${ id } requestGetWay send data`)
+						hexDebug(Buffer.from (uuuu.buffer, 'base64'))
+					}
+					return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ), () => {
+						socket.resume()
+					})
+					
+				}
+				
+				logger( colors.red(`encryptStream writable false!`), inspect(requestObj, false, 3, true))
+				return socket.end ( res._HTTP_404 )
+				
+			})
 
-		_socket.once ( 'error', err => {
-			logger ( colors.red(`Gateway server [${ gateway.gateWayIpAddress }] on error ${ colors.grey( err.message )}`))
-			socket.end ( res._HTTP_404 )
-		})
 
-		_socket.once ('end', () => {
-			logger(colors.blue(`Gateway ${uuuu.uuid } on end()`))
-			socket.end ()
-		})
+			_socket.once ( 'error', err => {
+				logger ( colors.red(`Gateway server [${ gateway.gateWayIpAddress }] on error ${ colors.grey( err.message )}`))
+				socket.end ( res._HTTP_404 )
+			})
 
-		socket.pipe ( encrypt ).pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( socket )
+			_socket.once ('end', () => {
+				logger(colors.blue(`Gateway ${uuuu.uuid } on end()`))
+				socket.end ()
+			})
+
+			socket.pipe ( encrypt ).pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( socket )
+		}
+		
+		return connect()
+		
 		
 	}
 }

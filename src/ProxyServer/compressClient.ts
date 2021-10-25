@@ -139,7 +139,7 @@ const HTTP_EOF = Buffer.from ( '\r\n\r\n', 'utf8' )
 export class encryptStream extends Transform {
 	private salt: Buffer
 	private iv: Buffer
-	private first = true
+	private first = 0
 	public derivedKey: Buffer = null
 
 	private BlockBuffer ( _buf: Buffer ) {
@@ -163,61 +163,76 @@ export class encryptStream extends Transform {
 		})
 	}
 
-	constructor ( private password: string, private random: number, private httpHeader : ( str: string ) => Buffer, private debug: boolean ) {
+	constructor ( private id: string,  private password: string, private random: number, private httpHeader : ( str: string ) => Buffer, private debug: boolean ) {
 		super ()
 	}
 	
 	public _transform ( chunk: Buffer, encode, cb ) {
-
 		
 		if ( !this.derivedKey ) {
 			return this.init (() => {
 				return this._transform ( chunk, encode, cb )
 			})
 		}
+
+
+		this.first ++
+
 		if ( this.debug ) {
-			logger(`encryptStream get DATA [${ chunk.length }]`)
-			hexDebug (chunk)
+			logger(`${this.id } encryptStream get DATA [${ chunk.length }] 【${ colors.red( this.first.toString() )}】`)
+			hexDebug( chunk )
 		}
-		const cipher = createCipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
+		if ( this.first < 5 ) {
+			const cipher = createCipheriv ( 'aes-256-gcm', this.derivedKey, this.iv )
 
-		let _text = Buffer.concat ([ Buffer.alloc ( 4, 0 ) , chunk ])
-
-		_text.writeUInt32BE ( chunk.length, 0 )
-
-		if ( chunk.length < this.random ) {
-			_text = Buffer.concat ([ _text, Buffer.allocUnsafe ( Math.random() * 1000 )])
-		}
-
-		const _buf = Buffer.concat ([ cipher.update ( _text ), cipher.final ()])
-		const getAuthTag = cipher.getAuthTag ()
-
-		const _buf1 = Buffer.concat ([ getAuthTag, _buf ])
-		logger(colors.blue(`encryptStream getAuthTag length = [${ getAuthTag.length }] _buf1.length = [${ _buf.length }] total length = [${ _buf1.length }]` ))
-		hexDebug( _buf1 )
-		if ( this.first ) {
-			this.first = false
-			const black = Buffer.concat ([ this.salt, this.iv, _buf1 ]).toString ( 'base64' )	//	 76
-			if ( ! this.httpHeader ) {
-				const _buf4 = Buffer.from ( black, 'base64')
-				return cb ( null, Buffer.concat ([ HTTP_HEADER, this.BlockBuffer ( _buf4 ), _buf4, EOF ]))
+			let _text = Buffer.concat ([ Buffer.alloc ( 4, 0 ) , chunk ])
+	
+			_text.writeUInt32BE ( chunk.length, 0 )
+	
+			if ( chunk.length < this.random ) {
+				_text = Buffer.concat ([ _text, Buffer.allocUnsafe ( Math.random() * 1000 )])
 			}
-			const _buf2 = this.httpHeader ( black )
-			this.debug ? logger(colors.blue( `encryptStream FIRST push data---> [${ _buf2.length }]`)): null
-			return cb ( null, _buf2 )
+	
+			const _buf = Buffer.concat ([ cipher.update ( _text ), cipher.final ()])
+			const getAuthTag = cipher.getAuthTag ()
+	
+			const _buf1 = Buffer.concat ([ getAuthTag, _buf ])
+			
+			if ( this.first === 1) {
+	
+				const black = Buffer.concat ([ this.salt, this.iv, _buf1 ]).toString ( 'base64' )	//	 76
+				if ( ! this.httpHeader ) {
+					const _buf4 = Buffer.from ( black, 'base64')
+					return cb ( null, Buffer.concat ([ HTTP_HEADER, this.BlockBuffer ( _buf4 ), _buf4, EOF ]))
+				}
+				const _buf2 = this.httpHeader ( black )
+				if ( this.debug ) {
+					logger(colors.blue( `${this.id} encryptStream FIRST push data---> [${ _buf2.length }]`))
+					hexDebug(_buf2 )
+				}
+				
+				return cb ( null, _buf2 )
+			}
+			
+			const _buf2 = _buf1.toString( 'base64' )
+			this.debug ? logger (colors.blue( `encryptStream [${ this.id }: step ${ colors.red( this.first.toString() )}] push data---> [${ _buf2.length }]`)): null
+			return cb ( null, Buffer.from(_buf2 + EOF))
 		}
-		
 
-		const _buf2 = _buf1.toString( 'base64' )
-		this.debug ? logger (colors.blue( `encryptStream push data---> [${ _buf2.length }]`)): null
-		return cb ( null, _buf2 )
+		const _buffer = Buffer.from(chunk.toString('base64')+EOF)
+
+		if ( this.debug ) {
+			logger(`${this.id } encryptStream DIRECT send data to Gateway [${ _buffer.length }] 【${ colors.red( this.first.toString() )}】`)
+			hexDebug( _buffer )
+		}
+		return cb ( null, _buffer)
 	}
 }
 
 export class decryptStream extends Transform {
 	private salt: Buffer
 	private iv: Buffer
-
+	private first = 0
 	private derivedKey: Buffer = null
 	private _decrypt ( _text: Buffer ) {
 		
@@ -268,22 +283,30 @@ export class decryptStream extends Transform {
 
 	
 	public _transform ( chunk: Buffer, encode, cb ) {
-		if ( !this.derivedKey ) {
+		this.first ++
+		if ( this.first < 5 ) {
+			if ( !this.derivedKey ) {
 
-			return this._First ( chunk, cb )
+				return this._First ( chunk, cb )
+			}
+			const text = this._decrypt ( chunk )
+	
+			if ( ! text.length ) {
+				logger (colors.red(`decryptStream get empty DATA send ERROR`))
+				return cb ( new Error ( 'lenth = 0'))
+			}
+			if ( this.debug ) {
+				logger(colors.green(`decryptStream <-- from gateway 【${ colors.red(this.first.toString())}】decrypted`))
+				hexDebug (text)
+			}
+			return cb ( null, text )
 		}
-
-		const text = this._decrypt ( chunk )
-
-		if ( ! text.length ) {
-			logger (colors.red(`decryptStream get empty DATA send ERROR`))
-			return cb ( new Error ( 'lenth = 0'))
-		}
+		
 		if ( this.debug ) {
-			logger(colors.green(`decryptStream <-- from gateway`))
-			hexDebug (text)
+			logger(colors.green(`decryptStream <-- from gateway 【${ colors.red(this.first.toString())}】direct`))
+			hexDebug (chunk)
 		}
-		return cb ( null, text )
+		return cb ( null, chunk )
 		
 	}
 }
@@ -316,72 +339,46 @@ class encodeHex extends Transform {
 	}
 }
 
-export class getDecryptClientStreamFromHttp extends Transform {
-
-	private first = true
+export class getDecryptClientStreamHttp extends Transform {
+	private first = 0
 	private text = ''
-	constructor () { super ()}
-
-	public getBlock ( block: string ) {
-		
-
-		const uu = block.split ('\r\n')
-		if ( uu.length !== 2 ) {
-			return null
-		}
-		const length = parseInt ( uu[0], 16 )
-
-		const text = uu [1]
-		if ( length === text.length ) {
-			
-			return text
-		}
-		return null
-	}
+	constructor ( private debug: boolean, private id: string ) { super ()}
 
 	public _transform ( chunk: Buffer, encode, cb ) {
-
-		logger (colors.blue(`getDecryptClientStreamFromHttp <--- from Gateway [${ chunk.length }]`))
-		this.text += chunk.toString ( 'utf8' )
-
+		
+		this.text += chunk.toString ()
 		const line = this.text.split ( '\r\n\r\n' )
 
-		while ( this.first && line.length > 1 || !this.first && line.length ) {
-
-			if ( this.first ) {
-				this.first = false
-				line.shift()
-			}
-
-			const _text = line.shift ()
-
-			if ( ! _text.length ) {
-				continue
-			}
-				
-
-			if ( /HTTP\/1\.1 404 Not Found/i.test ( _text )) {
-				return cb ( new Error ( '404' ))
-			}
-
-			const text = this.getBlock ( _text )
-			if ( ! text ) {
-				//			middle data can't get block
-				if ( line.length ) {
-					console.log ( 'getDecryptStreamFromHttp have ERROR:\n*****************************\n' )
-					console.log ( text )
-					return this.unpipe()
-				}
-				this.text = _text
-				return cb ()
-			}
-
-			const _back = Buffer.from ( text, 'base64' )
-			logger ( colors.green(`getDecryptClientStreamFromHttp push DATA [${ _back.length }]`))
-			this.push ( _back )
+		if ( line.length < 2 ) {
+			return cb()
 		}
-		this.text = ''
-		return cb ()
+		if (this.debug){
+			logger(colors.gray(this.text))
+		}
+		let currentBlock = line.shift()
+		this.text = line.join('\r\n\r\n')
+		this.first ++
+		
+		if ( this.first === 1) {
+			
+			const headers = currentBlock.split ('\r\n')
+			const command = headers[0].split(' ')
+			
+			if ( command[1] !== '200' ) {
+				logger (colors.red(`${ this.id } !200 ERROR getDecryptClientStreamHttp <--- from Gateway`))
+				return cb(new Error('Gateway return !200'))
+			}
+
+			return this._transform(Buffer.from(''), encode, cb)
+		}
+
+
+		const _block = Buffer.from ( currentBlock, 'base64' )
+		if ( this.debug ) {
+			logger (colors.blue(`${ this.id } getDecryptClientStreamHttp <--- from Gateway [${ chunk.length }] 【${colors.red( this.first.toString() )}】`))
+			hexDebug (_block)
+		}
+		return cb (null, _block)
 	}
 }
 
@@ -573,9 +570,7 @@ export class SencryptStream extends Transform {
 		}
 		
 		const _buf2 = _buf1.toString ( 'base64' )
-		if ( this.httpHeader ) {
-			return cb ( null, this.httpHeader ( _buf2 ))
-		}
+
 		const _buf3 = Buffer.from ( _buf2, 'utf8' )
 		return cb ( null, Buffer.concat ([ this.BlockBuffer ( _buf3 ), _buf3, EOF ]))
 	}

@@ -64,7 +64,7 @@ if ( args[0] === '-g' ) {
 		makeWork();
 	} else {
 		const server = require('./dist/GateWay/qtGate_httpServer');
-    	new server.ssModeV2 ( args [2], args [1]);
+    	new server.ssModeV3 ( args [2], args [1], debug);
 	}
     
 }
