@@ -129,7 +129,11 @@ export class socks5 {
 
 			if (!uuuu.ssl) {
 				const httpHeader = new httpProxyHeader (_data)
-				uuuu.host = httpHeader.host
+				uuuu.host = httpHeader.host || uuuu.host
+				if ( !httpHeader.host ) {
+					logger(colors.red(`Socks 5 have no host [header]`))
+					logger(Util.inspect(httpHeader.headers, false, 3, true))
+				}
 				userAgent = httpHeader.headers [ 'user-agent' ]
 				requestObj.methods = httpHeader.methods
 			}

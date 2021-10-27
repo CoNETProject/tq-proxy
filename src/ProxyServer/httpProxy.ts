@@ -98,6 +98,9 @@ export default class httpProxy {
 	}
 
 	get host () {
+		if ( !this.headers['host'] ) {
+			return ''
+		}
 		return this.headers['host'].split(':')[0]
 	}
 
