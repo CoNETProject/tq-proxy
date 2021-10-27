@@ -99,7 +99,7 @@ export default class gateWay {
 		const finish = new hostLookupResponse ( CallBack )
 		
 		const httpBlock = new Compress.getDecryptClientStreamHttp ( this.debug, id )
-		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
+		const decrypt = new Compress.decryptStream ( gateway.randomPassword, id, this.debug )
 		
 		logger (`try connect gateway server: [${ gateway.gateWayIpAddress }:${ gateway.gateWayPort }] password[${ gateway.randomPassword }]`)
 
@@ -145,9 +145,9 @@ export default class gateWay {
 			return socket.end ( res._HTTP_404 )
 		}
 
-		const id = colors.blue(`[${uuuu.uuid}]${uuuu.host}:${uuuu.port}`)
+		let id = colors.yellow(`[${uuuu.uuid}]${uuuu.host}:${uuuu.port}->[Gateway ${gateway.gateWayIpAddress}:${gateway.gateWayPort}]`)
 		
-		const decrypt = new Compress.decryptStream ( gateway.randomPassword, this.debug )
+		const decrypt = new Compress.decryptStream ( gateway.randomPassword, id, this.debug )
 		const encrypt = new Compress.encryptStream ( id, gateway.randomPassword, Math.random()*500, ( str: string ) => {
 			return this.request ( str, gateway )
 		}, this.debug )
@@ -159,7 +159,7 @@ export default class gateWay {
 		})
 
 		decrypt.once ('error', err => {
-			logger(colors.red(``))
+			logger(colors.red(`requestGetWay decrypt [${ id }] on error [${ err.message }]`))
 			socket.end ( res._HTTP_404 )
 		})
 
@@ -169,11 +169,11 @@ export default class gateWay {
 		})
 
 		encrypt.once ( 'error', err => {
-			console.log (`encrypt.once error`, err )
+			console.log (`requestGetWay [${ id }] encrypt.once error`, err )
 			socket.end ( res._HTTP_404 )
 		})
 		if (this.debug ) {
-			logger(colors.blue(`requestGetWay to [${gateway.gateWayIpAddress}:${ gateway.gateWayPort }] for [${ inspect( requestObj, false, 3, true ) }]`))
+			logger(colors.red(`requestGetWay to [${gateway.gateWayIpAddress}:${ gateway.gateWayPort }] for [${ inspect( requestObj, false, 3, true ) }]`))
 			hexDebug(Buffer.from(uuuu.buffer, 'base64'))
 		}
 
@@ -185,9 +185,10 @@ export default class gateWay {
 				}, 200)
 			}
 			const _socket = Net.createConnection ( gateway.gateWayPort || 80, gateway.gateWayIpAddress, () => {
+				id = colors.blue(`[${ _socket.localAddress }:${ _socket.localPort }] `) + id 
 				if ( encrypt && encrypt.writable ) {
 					if (this.debug ) {
-						logger(`${ id } requestGetWay send data`)
+						logger( colors.red(`${ id } success to Gateway! send data now.`))
 						hexDebug(Buffer.from (uuuu.buffer, 'base64'))
 					}
 					return encrypt.write ( Buffer.from ( JSON.stringify ( uuuu ), 'utf8' ), () => {

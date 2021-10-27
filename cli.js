@@ -97,6 +97,5 @@ if ( args[0] === '-p' ) {
     }
    
     const proxyServer = require ('./dist/ProxyServer/client');
-    const server = new proxyServer.proxyServer ( args[2], gateway, debug );
-		
+    new proxyServer.proxyServer ( args[2], gateway, debug );
 }
