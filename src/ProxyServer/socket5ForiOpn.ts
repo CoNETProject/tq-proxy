@@ -18,13 +18,11 @@ import * as Net from 'net'
 import * as Rfc1928 from './rfc1928'
 import * as res from './res'
 import * as Crypto from 'crypto'
-import { checkDomainInBlackList, isAllBlackedByFireWall } from './client'
 import httpProxyHeader from './httpProxy'
 import type { proxyServer } from './client'
 import * as Util from 'util'
 import { logger, hexDebug } from '../GateWay/log'
 import colors from 'colors/safe'
-import { Socket } from 'dgram'
 
 
 //	socks 5 headers

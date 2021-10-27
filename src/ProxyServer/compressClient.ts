@@ -258,7 +258,7 @@ export class decryptStream extends Transform {
 		this.iv = chunk.slice ( 64, 76 );
 		return pbkdf2 ( this.password, this.salt , 2145, 32, 'sha512', ( err, derivedKey ) => {
 			if ( err ) {
-				console.log ( `decryptStream crypto.pbkdf2 ERROR: ${ err.message }` )
+				console.log ( `${this.id } decryptStream crypto.pbkdf2 ERROR: ${ err.message }` )
 				return CallBack ( err )
 			}
 			this.derivedKey = derivedKey
@@ -276,7 +276,7 @@ export class decryptStream extends Transform {
 		})
 	}
 
-	constructor ( private password: string, private debug: boolean) {
+	constructor ( private password: string, private id: string, private debug: boolean) {
 		super ()
 		debug ? logger ( colors.blue(`new decryptStream`)): null
 	}

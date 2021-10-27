@@ -17,8 +17,6 @@
 import * as Net from 'net'
 import * as Http from 'http'
 import HttpProxyHeader from './httpProxy'
-import * as Async from 'async'
-import * as Rfc1928 from './rfc1928'
 import * as Crypto from 'crypto'
 import * as res from './res'
 import * as Fs from 'fs'
@@ -26,7 +24,7 @@ import * as Path from 'path'
 import * as Socks from './socket5ForiOpn'
 import gateWay from './gateway'
 import * as Os from 'os'
-import { hexDebug, logger } from '../GateWay/log'
+import { logger } from '../GateWay/log'
 import colors from 'colors/safe'
 import { inspect } from 'util'
 
@@ -55,37 +53,6 @@ const hostGlobalIpV6 = false
 
 const testGatewayDomainName = 'www.google.com'
 
-export const checkDomainInBlackList = ( BlackLisk: string[], domain: string, CallBack ) => {
-
-	if ( Net.isIP ( domain )) {
-		
-		return CallBack ( null, BlackLisk.find ( n => { return n === domain }) ? true : false )
-	}
-
-	const domainS = domain.split ('.')
-	return Async.some ( BlackLisk, ( n, next ) => {
-		const nS = n.split ('.')
-		let ret = false
-
-		for ( let i = nS.length - 1, ni = domainS.length - 1 ; i >= 0 && ni >= 0 ; i --, ni -- ) {
-
-			const ns = nS [i]
-			if ( domainS [ni].toLowerCase () !==  nS [i].toLowerCase ()) {
-				break
-			}
-
-			if ( i === 0 )
-				ret = true
-		}
-
-		return next ( null, ret )
-
-	}, ( err, result ) => {
-
-		return CallBack ( null, result )
-	})
-}
-
 
 const closeClientSocket = ( socket: Net.Socket, status: number = 404) => {
 	if ( !socket || ! socket.writable )
@@ -111,78 +78,6 @@ const closeClientSocket = ( socket: Net.Socket, status: number = 404) => {
 	return socket.end ( stat )
 	
 }
-
-const _connect = ( hostname: string, hostIp: string, port: number, clientSocket: Net.Socket, data: Buffer, connectHostTimeOut: number,  CallBack ) => {
-	console.log (`direct _connect!`)
-	const socket = new Net.Socket()
-	const ip = clientSocket.remoteAddress.split (':')[3]|| clientSocket.remoteAddress
-	let err = null
-	const id = `[${ ip }] => [${ hostname }:${ port }] `
-	const hostInfo = `{${ hostIp }:${ port }}`
-	let callbacked = false
-	const startTime = new Date ().getTime ()
-	const callBack = ( err ) => {
-		if ( callbacked )
-			return
-		callbacked = true
-		if ( socket && typeof socket.unpipe === 'function' )
-			socket.unpipe ()
-		if ( socket && typeof socket.end === 'function' )
-			socket.end ()
-		if ( socket && typeof socket.destroy === 'function' )
-			socket.destroy ()
-		CallBack ( err )
-	}
-
-	socket.on ( 'connect', () => {
-		console.log ( `${ id } socket.on connect!`)
-
-		clearTimeout ( timeout )
-
-		if ( callbacked ) {
-			const stopTime = new Date ().getTime ()
-			const connectTimeOutTime = stopTime - startTime + 500
-			
-			console.log (` connectHostTimeOut need change [${ connectHostTimeOut }] => [${ connectTimeOutTime }]`)
-			connectHostTimeOut = connectTimeOutTime
-			return socket.end ()
-		}
-		
-		socket.pipe ( clientSocket ).pipe ( socket )
-
-		if ( socket && socket.writable ) {
-			socket.write ( data )
-			return socket.resume ()
-		}
-			
-		return callBack ( null )
-		
-	})
-
-	clientSocket.on ( 'error', err => {
-		callBack ( null )
-		return console.log ( 'clientSocket on error', err.message )
-	})
-
-	socket.on ( 'error', err => {
-		console.log ( '_connect socket on error', err.message )
-		return callBack ( err )
-			
-	})
-
-	socket.on ( 'end', () => {
-		return callBack ( null )
-	})
-
-	const timeout = setTimeout (() => {
-		err = new Error ( `${ id } _connect timeout!` )
-		return callBack ( err )
-
-	}, connectHostTimeOut )
-
-	return socket.connect ( port, hostIp )
-}
-
 
 
 export const getSslConnectFirstData = ( clientSocket: Net.Socket, data: Buffer, first: boolean, CallBack ) => {
@@ -269,44 +164,6 @@ const httpProxy = ( clientSocket: Net.Socket, buffer: Buffer, _gatway: gateWay, 
 	
 
 }
-
-const httpProxyLocal = ( clientSocket: Net.Socket, buffer: Buffer ) => {
-	const httpHead = new HttpProxyHeader ( buffer )
-	const id = ` ${httpHead.host}:${httpHead.Port}`
-	logger(colors.blue(`Connect to ${id}`))
-	const connect = (_, _buffer) => {
-		const connect = Net.connect ({ port: httpHead.Port, host: httpHead.host }, () => {
-			connect.pipe (clientSocket).pipe (connect)
-
-			connect.write (buffer)
-			clientSocket.resume()
-		})
-		connect.once('error', err => {
-			logger(colors.red( `${id} connect.once('error') error=${ err.message }`))
-		})
-	}
-
-	if (httpHead.isConnect) {
-		return getSslConnectFirstData ( clientSocket, buffer, true, connect )
-	}
-	return connect (null, buffer )
-}
-
-/*
-declare const isInNet:( a: string, y: string, z: string ) => string
-declare const dnsResolve :( a: any ) => string
-function FindProxyForURL ( url, host )
-{
-	if ( isInNet ( dnsResolve( host ), "0.0.0.0", "255.0.0.0") ||
-		isInNet( dnsResolve( host ), "172.16.0.0", "255.240.255.0") ||
-		isInNet( dnsResolve( host ), "127.0.0.0", "255.255.255.0") ||
-		isInNet ( dnsResolve( host ), "192.168.0.0", "255.255.0.0" ) ||
-		isInNet ( dnsResolve( host ), "10.0.0.0", "255.0.0.0" )) {
-		return "DIRECT";
-	}
-	return "${ http ? 'PROXY': ( sock5 ? 'SOCKS5' : 'SOCKS' ) } ${ hostIp }:${ port.toString() }";
-}
-*/
 
 const getPac = ( hostIp: string, port: string, http: boolean, sock5: boolean ) => {
 
@@ -485,15 +342,16 @@ export class proxyServer {
 	}
 
 	public close ( Callback ) {
-		this.clientSockets.forEach ( n => {
-			if ( typeof n.end === 'function') {
-				n.end()
-			}
+		return this.server.close( err => {
+			this.clientSockets.forEach ( n => {
+				if ( typeof n.end === 'function') {
+					n.end()
+				}
+			})
+			
+			return Callback()
 		})
-		if ( typeof this.server.close ==='function'){
-			return this.server.close(Callback)
-		}
-		return Callback()
+		
 	}
 
 }

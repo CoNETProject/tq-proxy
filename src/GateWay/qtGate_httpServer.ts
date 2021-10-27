@@ -19,22 +19,13 @@ import type { Socket, Server } from 'net'
 import { isIPv4, connect, createServer } from 'net'
 import { lookup } from 'dns'
 import { Transform, Writable  } from 'stream'
-import Express from 'express'
 import * as Compress from './compress'
 import { writeFile } from 'fs'
 import { logger, hexDebug } from './log'
 import colors from 'colors/safe'
 const MaxAllowedTimeOut = 1000 * 60 * 60
 const blockHostFIleName = './blockHost.json'
-import { inspect } from 'util'
-const k = `< Server: nginx/1.6.2
-< Date: Fri, 22 Oct 2021 04:45:23 GMT
-< Content-Type: text/html; charset=utf-8
-< Content-Length: 612
-< Connection: keep-alive
-< Vary: Accept-Encoding
 
-`
 const otherRespon = ( body: string| Buffer, _status: number ) => {
 	const Ranges = ( _status === 200 ) ? 'Accept-Ranges: bytes\r\n' : ''
 	const Content = ( _status === 200 ) ? `Content-Type: text/html; charset=utf-8\r\n` : 'Content-Type: text/html\r\n'
@@ -97,172 +88,12 @@ const dnsLookup = ( hostName: string, CallBack ) => {
 	})
 }
 
-class listen extends Transform {
-	constructor ( private headString: string ) { super ()}
-	public _transform ( chunk: Buffer, encode, cb ) {
-
-		console.log ( this.headString )
-		console.log ( chunk.toString ('hex'))
-		console.log ( this.headString )
-		return cb ( null, chunk )
-	}
-}
-
 interface blockList {
 	host: string
 	port: string
 	date: string
 	error: string
 }
-/*
-export class ssModeV1 {
-	private logFileName = `qtgate_httpServer`
-	private serverNetPool: Map < number, Net.Server > = new Map ()
-	private _freeDomain: string [] = []
-	private _freeIpAddress: string [] = []
-	private blockList: blockList[]
-
-    private hostConet = new Map ()
-
-	private makeNewServer ( portNumber: number ) {
-		const serverNet = Net.createServer ( socket => {
-
-            const _remoteAddress = socket.remoteAddress
-			if ( typeof _remoteAddress !== 'string' ) {
-				logger (`socket have no _remoteAddress [${ _remoteAddress }] STOP socket`)
-				return socket.end ()
-
-			}
-			
-            const remoteAddress = _remoteAddress?.split ( ':' ).length > 2 ? _remoteAddress.split ( ':' )[3] : _remoteAddress
-
-			const id = `[${ remoteAddress }]:[${ socket.remotePort }]`
-			logger ( `Client ${ id } connect to server!`)
-
-			serverNet.getConnections (( err, count ) => {
-				if ( err ) {
-					return logger (`serverNet.getConnections [${ id }] [${ portNumber }] ERROR: `, err )
-				}
-				return logger (`new ssMode connect [${ id }:${ portNumber }] opened connect=[${ count }]`)
-			})
-			
-            
-            const streamFunBlock = new StreamFun.blockRequestData ( true, MaxAllowedTimeOut )
-
-			streamFunBlock.once ('error', err => {
-				logger ( `${ id } streamFunBlock on ERROR stop SOCKET!`, err.message )
-				if ( err.message === '200') {
-					return socket.end (returnHome ())
-				}
-				return socket.end ( return404 ())
-			})
-            
-            const streamDecrypt = new Compress.decryptStream ( id, this.password, n => {
-				return 
-			})
-
-			streamDecrypt.once ('error', err => {
-
-				logger ( inspect ({ streamDecrypt_On_ERROR: `${ id }`, Headers: streamFunBlock ? streamFunBlock.headers: 'streamFunBlock have no working!'}, false, 3, true )) 
-				return socket.end ( return404 ())
-			})
-
-            const streamEncrypt = new Compress.encryptStream ( id, this.password, 500, n => {
-				return 
-			}, null, err => {
-				
-            	const firstConnect = new FirstConnect ( this.debug, streamFunBlock, socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
-
-                firstConnect.once ( 'error', err => {
-                    logger ( colors.magenta(`[${ streamFunBlock.part0 }]firstConnect.on ERROR: ${err.message}`))
-                    return socket.end ( return404 ())
-				})
-				
-				socket.pipe ( streamFunBlock ).pipe ( streamDecrypt ).pipe ( firstConnect ).once ('error', err => {
-					console.log ( `pipe on ERROR:`, err.message )
-					socket.end ( return404 ())
-				})
-            })
-            
-            socket.once ( 'end', () => {
-                return serverNet.getConnections (( err, count ) => {
-                    return console.log ( `[${ id }:${ portNumber } ]socket.on END! connected = `, count )
-                })
-                
-            })
-
-            socket.once ( 'unpipe', src => {
-				//console.log (`[${ id }:${ portNumber }] socket.once unpipe!`)
-                return socket.end ()
-            })
-
-            socket.once ( 'error', err => {
-				console.log (`socket.on ERROR!`)
-                return socket.end ()
-            })
-
-        })
-        
-        serverNet.on ( 'error', err => {
-			return logger ( 'ssModeV1 serverNet.on error:' + err.message )
-        })
-		serverNet.maxConnections = 12800
-        return serverNet.listen ( portNumber, null, 2048, () => {
-            const log = `SS mode start up listening on [${ portNumber }]`
-            return logger ( log )
-        })
-	}
-
-	constructor ( private port: number, private password, public debug: boolean = false ) {
-		this.makeNewServer ( port )
-		try {
-			this.blockList = require (blockHostFIleName)
-		} catch ( ex ) {
-			this.blockList = [
-				{host: '42.63.21.217', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()},
-				{host: '139.170.156.220', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()}
-			]
-			// saveConnectErrorIPAddress ( this.blockList, err => {
-			// 	if ( err ) {
-			// 		console.log ( `ssModeV1 constructor saveConnectErrorIPAddress error`, err )
-			// 	}
-			// })
-		}
-	}
-	
-	public stopServer ( portNumber: number ) {
-		const server = this.serverNetPool.get ( portNumber )
-		if ( !server ) {
-			return console.log (`ssModeV1 on stopServer [${ portNumber }] but ca't find!`)
-		}
-		return server.close ()
-	}
-
-	// public freeDomain ( freeDomain: string [], freeIpAddress: string[], blockedIpaddress: string[] ) {
-	// 	this._freeDomain = freeDomain
-	// 	this._freeIpAddress = freeIpAddress
-	// 	blockedIpaddress.forEach ( n => {
-	// 		this.blockList.set ( n, true )
-	// 	})
-	// 	//console.log (`ssModeV1 have new freeDomain\n${ this._freeDomain }\n${ this._freeIpAddress }\n${ this.blockList }`)
-	// }
-
-	// public addBlockIpaddress ( iptables: string[]) {
-	// 	iptables.forEach ( n => {
-	// 		this.blockList.set ( n, true )
-	// 	})
-	// 	return
-	// }
-
-	public addListenPort ( portNumber: number ) {
-		const server = this.serverNetPool.get ( portNumber )
-		if ( server ) {
-			return console.log (`addListenPort [${ portNumber }] already ready!`)
-		}
-		return this.makeNewServer ( portNumber )
-	}
-}
-*/
 
 const saveConnectErrorIPAddress = ( blockedHost: blockList[], CallBack ) => {
 	return writeFile ( blockHostFIleName, JSON.stringify (blockedHost), 'utf8', CallBack )
@@ -367,9 +198,11 @@ class FirstConnect extends Writable {
 		}
 
 		//		the next stream
+		if (this.debug ) {
+			logger (colors.blue(`FirstConnect next chunk coming:`))
+			hexDebug (chunk)
+		}
 
-		logger (colors.blue(`FirstConnect next chunk coming:`))
-		hexDebug (chunk)
 
 		if ( this.socket.writable ) {
 			return this.socket.write ( Buffer.from ( chunk.toString(), 'base64' ), err => {
@@ -418,7 +251,9 @@ class preProcessData {
 	}
 
 	private firstConnectV2 = (cmd: string) => {
-
+		if (this.debug ) {
+			logger(colors.red(`new Connect from ${ this.socket.remoteAddress}:${ this.socket.remotePort }`))
+		}
 		const streamDecrypt = new Compress.decryptStream ( this.id, this.debug, this.password, () => {
 			return
 		})
@@ -427,8 +262,6 @@ class preProcessData {
 			logger (colors.red(`${this.id} streamDecrypt had error STOP connecting err: ${ err.message }`))
 			return this.closeWith404 ()
 		})
-
-		
 		
 
 		const streamEncrypt = new Compress.encryptStream ( this.id, this.debug, this.password, Math.random()*500, () => {
@@ -438,7 +271,7 @@ class preProcessData {
 			const firstConnect = new FirstConnect ( this.debug, this.socket, streamEncrypt, streamDecrypt, this._freeDomain, this._freeIpAddress, this.blockList, this.hostConet )
 
 			firstConnect.once ( 'error', err => {
-				logger ( colors.magenta(`${ this.id } FirstConnect class on Error: ${ err.message }`))
+				logger ( colors.red(`${ this.id } FirstConnect class on Error: ${ err.message }`))
 				return this.closeWith404 ()
 			})
 
@@ -488,7 +321,7 @@ export class ssModeV3 {
 	private blockList
 	private printConnects () {
 		return this.serverNet.getConnections((err, count)=> {
-			return logger (colors.blue (`COnnections [${ count }]`))
+			return logger (colors.blue (`Connections [${ count }]`))
 		})
 	}
 	private serverNet: Server = null
@@ -499,7 +332,7 @@ export class ssModeV3 {
 			return new preProcessData( socket,this.password, this.debug )
 		})
 
-		this.serverNet.listen ( this.port, () => {
+		this.serverNet.listen ( this.port, null, 16384, () => {
 			return logger (colors.blue(`\n**************************************************\nGateway server start listen at port [${ this.port }] DEBUG [${ this.debug }]\n**************************************************`))
 		})
 
@@ -522,11 +355,6 @@ export class ssModeV3 {
 				{host: '42.63.21.217', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()},
 				{host: '139.170.156.220', error: 'connect ETIMEDOUT', port: '443', date: new Date ().toISOString()}
 			]
-			// saveConnectErrorIPAddress ( this.blockList, err => {
-			// 	if ( err ) {
-			// 		console.log ( `ssModeV1 constructor saveConnectErrorIPAddress error`, err )
-			// 	}
-			// })
 		}
 	}
 }
