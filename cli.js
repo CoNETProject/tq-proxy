@@ -98,10 +98,5 @@ if ( args[0] === '-p' ) {
    
     const proxyServer = require ('./dist/ProxyServer/client');
     const server = new proxyServer.proxyServer ( args[2], gateway, debug );
-    setTimeout(() => {
-        logger(`STOP proxy server!`)
-        server.close(() => {
-            logger(`STOP proxy server success.`)
-        })
-    }, 1000 * 60 )
+
 }
