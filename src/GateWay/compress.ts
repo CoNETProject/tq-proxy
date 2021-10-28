@@ -23,6 +23,7 @@ import { exec } from 'child_process'
 import * as Uuid from 'node-uuid'
 import colors from 'colors/safe'
 import { hexDebug, logger } from './log'
+import type { Socket } from 'net'
 
 const EOF = Buffer.from ( '\r\n\r\n', 'utf8' )
 
@@ -50,7 +51,7 @@ export class encryptStream extends Stream.Transform {
 	public dataCount = false
 
 
-	constructor ( public id: string, private debug: boolean, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
+	constructor ( private socket: Socket, public id: string, private debug: boolean, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
 		super ()
 		Async.waterfall ([
 			next => crypto.randomBytes ( 64, next ),
@@ -138,8 +139,10 @@ export class encryptStream extends Stream.Transform {
 			logger( colors.blue(`${ this.id } encryptStream got Buffer from Target【${ colors.red( this.first.toString()) }】Sent direct to Client`))
 			hexDebug(_buf2)
 		}
-		
-		return cb ( null, _buf2 )
+		if ( this.socket.writable ) {
+			return cb ( null, _buf2 )
+		}
+		return cb(new Error(`${ this.id } encryptStream writable = false `))
 	}
 }
 

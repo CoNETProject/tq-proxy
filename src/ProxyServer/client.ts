@@ -201,12 +201,14 @@ export class proxyServer {
 	public clientSockets: Set<Net.Socket> = new Set() 
 	
 	private saveWhiteIpList () {
-		if ( this.whiteIpList.length > 0 )
+		if ( this.whiteIpList.length > 0 ) {
 			Fs.writeFile ( Path.join( __dirname, whiteIpFile ), JSON.stringify( this.whiteIpList ), { encoding: 'utf8' }, err => {
 				if ( err ) {
 					return console.log ( `saveWhiteIpList save file error : ${ err.message }`)
 				}
 			})
+		}
+
 	}
 
 	private getGlobalIp = ( gateWay: gateWay ) => {
@@ -322,23 +324,6 @@ export class proxyServer {
 	public exit () {
 		logger ( colors.red(`************ proxyServer on exit ()`))
 		this.gateway = null
-	}
-
-
-	public reNew ( multipleGateway: IConnectCommand[] ) {
-		
-		this.gateway = new gateWay ( this.multipleGateway = multipleGateway, this.debug )
-	}
-
-	public changeDocker ( data: IConnectCommand ) {
-
-		const index = this.multipleGateway.findIndex ( n => { return n.containerUUID === data.containerUUID })
-		if ( index < 0 ) {
-			this.multipleGateway.push ( data )
-			return saveLog (`on changeDocker [${ data.containerUUID }] Add it`)
-		}
-		this.multipleGateway [ index ] = data
-		return this.gateway = new gateWay ( this.multipleGateway, this.debug )
 	}
 
 	public close ( Callback ) {

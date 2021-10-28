@@ -18,7 +18,7 @@
 import type { Socket, Server } from 'net'
 import { isIPv4, connect, createServer } from 'net'
 import { lookup } from 'dns'
-import { Transform, Writable  } from 'stream'
+import { Writable  } from 'stream'
 import * as Compress from './compress'
 import { writeFile } from 'fs'
 import { logger, hexDebug } from './log'
@@ -174,7 +174,7 @@ class FirstConnect extends Writable {
 
 				this.socket.once ( 'end', () => {
 					logger( colors.blue(`${ this.decrypt.id } Target on END()`))
-					return this.clientSocket.end()
+					return this.clientSocket.destroy()
 				})
 
 				this.socket.once ( 'error', err => {
@@ -264,7 +264,7 @@ class preProcessData {
 		})
 		
 
-		const streamEncrypt = new Compress.encryptStream ( this.id, this.debug, this.password, Math.random()*500, () => {
+		const streamEncrypt = new Compress.encryptStream ( this.socket, this.id, this.debug, this.password, Math.random()*500, () => {
 			return 
 		}, null, err => {
 			
@@ -280,6 +280,13 @@ class preProcessData {
 			})
 			
 			return streamDecrypt.write ( cmd + '\r\n\r\n' )
+		})
+
+		streamEncrypt.once ('error', err => {
+			logger(colors.red(`${ this.id } streamEncrypt on error! STOP socket`))
+			if ( this.socket && typeof this.socket.destroy === 'function') {
+				this.socket.destroy ()
+			}
 		})
 
 	}

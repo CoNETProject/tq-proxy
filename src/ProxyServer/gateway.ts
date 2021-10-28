@@ -109,6 +109,7 @@ export default class gateWay {
 		})
 
 		_socket.once ( 'end', () => {
+
 			//console.log ( `_socket.once end!` )
 		})
 
@@ -172,6 +173,7 @@ export default class gateWay {
 			console.log (`requestGetWay [${ id }] encrypt.once error`, err )
 			socket.end ( res._HTTP_404 )
 		})
+
 		if (this.debug ) {
 			logger(colors.red(`requestGetWay to [${gateway.gateWayIpAddress}:${ gateway.gateWayPort }] for [${ inspect( requestObj, false, 3, true ) }]`))
 			hexDebug(Buffer.from(uuuu.buffer, 'base64'))
@@ -210,7 +212,7 @@ export default class gateWay {
 
 			_socket.once ('end', () => {
 				logger(colors.blue(`Gateway ${uuuu.uuid } on end()`))
-				socket.end ()
+				socket.destroy ()
 			})
 
 			socket.pipe ( encrypt ).pipe ( _socket ).pipe ( httpBlock ).pipe ( decrypt ).pipe ( socket )
