@@ -327,14 +327,19 @@ export class proxyServer {
 	}
 
 	public close ( Callback ) {
-		return this.server.close( err => {
-			this.clientSockets.forEach ( n => {
-				if ( typeof n.end === 'function') {
-					n.end()
-				}
-			})
+		logger(colors.red(`Local proxy doing close`))
+		this.server.close( err => {
+			logger(colors.red(`server.close success! now doing close all [${ this.clientSockets.size }] sockets `))
+			
 			
 			return Callback()
+		})
+		this.clientSockets.forEach ( n => {
+			logger(colors.blue(`close [${ n.remotePort }]`))
+			if ( typeof n.destroy === 'function') {
+				return n.destroy()
+			}
+
 		})
 		
 	}
