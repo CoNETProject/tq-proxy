@@ -50,10 +50,8 @@ export class encryptStream extends Stream.Transform {
 	public derivedKey: Buffer = null
 	public dataCount = false
 
-
-	constructor ( private socket: Socket, public id: string, private debug: boolean, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
-		super ()
-		Async.waterfall ([
+	private initCrypt (CallBack) {
+		return Async.waterfall ([
 			next => crypto.randomBytes ( 64, next ),
 			( _salt, next ) => {
 				this.salt = _salt
@@ -61,17 +59,26 @@ export class encryptStream extends Stream.Transform {
 			},
 			( _iv, next ) => {
 				this.iv = _iv
-				crypto.pbkdf2 ( password, this.salt, 2145, 32, 'sha512', next )
+				try {
+					crypto.pbkdf2 ( this.password, this.salt, 2145, 32, 'sha512', next)
+				} catch (ex) {
+					return next (ex)
+				}
+				
 			}
 		], ( err, derivedKey ) => {
 			if ( err ) {
-				console.log (colors.red(`encryptStream init error ${ err.message }`))
-				return this.ERR = err
+				console.log (colors.red(`encryptStream init error ${ err.message } TRY again`))
+				return this.initCrypt (CallBack)
 			}
 				
 			this.derivedKey = derivedKey
-			return CallBack ( err )
+			return CallBack ()
 		})
+	}
+	constructor ( private socket: Socket, public id: string, private debug: boolean, private password: string, private random: number, public download:( n: number ) => void, private httpHeader : ( str: string ) => Buffer, CallBack ) {
+		super ()
+		this.initCrypt (CallBack)
 	}
 	
 	public _transform ( chunk: Buffer, encode, cb ) {

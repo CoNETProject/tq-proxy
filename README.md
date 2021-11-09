@@ -18,6 +18,8 @@ TQ Proxy類似於Shadowsocks代理服務器，但TQ Proxy可同時使用多個�
 
 ![http protocol](/resouce/iOPN4.png?raw=true)
 
+![http protocol](/resouce/iOPN4.png?raw=true)
+
 ## INSTALL 安裝
 1. Install NodeJS / 安裝NodeJS
 
@@ -66,16 +68,9 @@ Setup two gateway server for proxy server
 ]
 ```
 
-## 我們提供預設置完成的iOPN網關服務器
-### 可選數據中心位置
-北美, 英國, 德國, 西班牙
-
-```
-1vCore 512MB    $5/month  400 Mbit/s帶寬，無限網絡流量 適合個人(建議同時設置2台以上以達到混淆流量)
-2vCore 2GB      $20/month 400 Mbit/s帶寬，無限網絡流量 適合小規模公司(建議同時設置2台以上以達到混淆流量)
-4vCore 8GB      $80/month 400 Mbit/s帶寬，無限網絡流量 適合小規模公司(建議同時設置2台以上以達到混淆流量)
-```
-請聯繫peter@Kloak.io
+## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
+![http protocol](https://www.tq-proxy.com/wp-content/uploads/2021/11/output.mp4)
+https://www.tq-proxy.com
 
 ## Notice 注意事項
 
