@@ -19,6 +19,7 @@ TQ Proxy是輕量高速代理服務器，它支持 HTTP/HTTPS Proxy, Socks v4和
 
 TQ Proxy類似於Shadowsocks代理服務器，但TQ Proxy可同時使用多個網關服務器，以達到網絡加速和減少網關服務器被流量監控發現的風險。
 
+![iOPN4](https://user-images.githubusercontent.com/19976150/140952713-faf12d83-46a8-4bfb-8fcd-30d7beeb928d.png)
 
 
 
