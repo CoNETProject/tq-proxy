@@ -19,7 +19,8 @@ TQ Proxy 是加拿大Kloak公司開發的輕量高速代理服務器，它支持
 
 TQ Proxy類似於Shadowsocks代理服務器，但TQ Proxy可同時使用多個網關服務器，以達到網絡加速和減少網關服務器被流量監控發現的風險。
 
-![http protocol](/resouce/iOPN4.png?raw=true)
+
+
 
 ## INSTALL 安裝
 1. Install NodeJS / 安裝NodeJS
@@ -72,6 +73,7 @@ Setup two gateway server for proxy server
 ## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
 
 https://www.tq-proxy.com
+<img width="1497" href="https://www.tq-proxy.com" alt="https://www.tq-proxy.com" src="https://user-images.githubusercontent.com/19976150/140950996-98590619-e981-4631-933a-1bdab799ae65.png">
 
 
 ## Notice 注意事項
