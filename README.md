@@ -67,7 +67,7 @@ Setup two gateway server for proxy server
 ```
 
 ## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
-![Watch the video](https://youtu.be/W1Lh-b3OP9w)
+[!Watch the video](https://img.youtube.com/vi/W1Lh-b3OP9w/maxresdefault.jpg)](https://youtu.be/W1Lh-b3OP9w)
 https://www.tq-proxy.com
 
 ## Notice 注意事項
