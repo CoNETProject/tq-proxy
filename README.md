@@ -18,8 +18,6 @@ TQ Proxy類似於Shadowsocks代理服務器，但TQ Proxy可同時使用多個�
 
 ![http protocol](/resouce/iOPN4.png?raw=true)
 
-![http protocol](/resouce/iOPN4.png?raw=true)
-
 ## INSTALL 安裝
 1. Install NodeJS / 安裝NodeJS
 
@@ -69,7 +67,7 @@ Setup two gateway server for proxy server
 ```
 
 ## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
-![http protocol](https://www.tq-proxy.com/wp-content/uploads/2021/11/output.mp4)
+![Watch the video](https://youtu.be/W1Lh-b3OP9w)
 https://www.tq-proxy.com
 
 ## Notice 注意事項
