@@ -1,6 +1,6 @@
 {
-	"name": "@kloak-it/tq-proxy",
-	"version": "0.0.40",
+	"name": "@kloak-it/tq-proxy-ios",
+	"version": "0.0.41",
 	"license": "MIT",
 	"description": "QT PROXY Server/Client",
 	"scripts": {
@@ -12,16 +12,16 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/CoNETProject/iOPN.git"
+		"url": "git+https://github.com/CoNETProject/tq-proxy.git"
 	},
 	"author": {
-		"name": "Kloak Information Technologies Inc.",
-		"email": "info@Kloak.io"
+		"name": "TQ-Proxy project",
+		"email": "info@tq-proxy.com"
 	},
 	"bugs": {
-		"url": "https://github.com/CoNETProject/iOPN/issues"
+		"url": "https://github.com/CoNETProject/tq-proxy/issues"
 	},
-	"homepage": "https://www.Kloak.io",
+	"homepage": "https://www.tq-proxy.com",
 	"devDependencies": {
 		"@types/express": "4.17.13",
 		"@types/jest": "^27.0.1",
