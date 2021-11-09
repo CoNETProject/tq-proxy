@@ -11,7 +11,7 @@ Communication between the two parts is using HTTP protocol to make a virtual tun
 
 [Kloak Information Technologies Inc.](https://www.Kloak.app).
 
-TQ Proxy 是加拿大Kloak公司開發的輕量高速代理服務器，它支持 HTTP/HTTPS Proxy, Socks v4和v5。
+TQ Proxy是輕量高速代理服務器，它支持 HTTP/HTTPS Proxy, Socks v4和v5。
 
 它把一個Proxy服務器拆分成網關服務器和代理服務器二個部分,代理服務器獲取客戶端的網絡請求後，提交給網關服務器去訪問目標主機，然後回傳給代理服務器並返回客戶端。
 
@@ -73,7 +73,8 @@ Setup two gateway server for proxy server
 ## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
 
 https://www.tq-proxy.com
-<img width="1497" href="https://www.tq-proxy.com" alt="https://www.tq-proxy.com" src="https://user-images.githubusercontent.com/19976150/140950996-98590619-e981-4631-933a-1bdab799ae65.png">
+
+<img width="1497" alt="https://www.tq-proxy.com" src="https://user-images.githubusercontent.com/19976150/140950996-98590619-e981-4631-933a-1bdab799ae65.png">
 
 
 ## Notice 注意事項
