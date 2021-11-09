@@ -2,7 +2,7 @@
 
 ## Description 概要
 
-![Comp_1_SparkVideo (2)](https://user-images.githubusercontent.com/19976150/140949990-22c6d9fe-5046-40dd-b8e2-edfe1f2f6cf4.gif)
+![multiple gateway](https://user-images.githubusercontent.com/19976150/140949990-22c6d9fe-5046-40dd-b8e2-edfe1f2f6cf4.gif)
 
 
 TQ Proxy is lightweight and fast Proxy server based on NodeJS. It provide HTTP, HTTPS, SOCKS v4 & v5 proxy.
