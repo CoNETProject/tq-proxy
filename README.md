@@ -73,9 +73,6 @@ Setup two gateway server for proxy server
 https://www.tq-proxy.com
 
 
-https://user-images.githubusercontent.com/19976150/140948655-245468de-731c-4885-83b6-beaa86659ff1.mp4
-
-
 ## Notice 注意事項
 
 This version do not support UDP proxy.
