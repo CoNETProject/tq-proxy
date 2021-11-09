@@ -2,7 +2,7 @@
 
 ## Description 概要
 
-https://user-images.githubusercontent.com/19976150/140948655-245468de-731c-4885-83b6-beaa86659ff1.mp4
+![Comp_1_SparkVideo (2)](https://user-images.githubusercontent.com/19976150/140949990-22c6d9fe-5046-40dd-b8e2-edfe1f2f6cf4.gif)
 
 TQ Proxy is lightweight and fast Proxy server based on NodeJS. It provide HTTP, HTTPS, SOCKS v4 & v5 proxy.
 TQ Proxy splits a proxy to two parts, one is the gateway server and proxy server.
@@ -18,7 +18,7 @@ TQ Proxy 是加拿大Kloak公司開發的輕量高速代理服務器，它支持
 
 TQ Proxy類似於Shadowsocks代理服務器，但TQ Proxy可同時使用多個網關服務器，以達到網絡加速和減少網關服務器被流量監控發現的風險。
 
-![http protocol](/resouce/iOPN4.png?raw=true)
+![iOPN4](https://user-images.githubusercontent.com/19976150/140950874-e1392820-35a2-45ee-949a-d6c04d6c902c.png)
 
 ## INSTALL 安裝
 1. Install NodeJS / 安裝NodeJS
@@ -71,7 +71,7 @@ Setup two gateway server for proxy server
 ## Customized Dedicated Private Gateway Cluster service/訂製專屬VPN代理集群服務
 
 https://www.tq-proxy.com
-
+<img width="1497" alt="https://www.tq-proxy.com" src="https://user-images.githubusercontent.com/19976150/140950996-98590619-e981-4631-933a-1bdab799ae65.png">
 ## Notice 注意事項
 
 This version do not support UDP proxy.
