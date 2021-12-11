@@ -1,6 +1,6 @@
 {
-	"name": "@kloak-it/tq-proxy-ios",
-	"version": "0.0.41",
+	"name": "@kloak-it/tq-proxy",
+	"version": "0.0.52",
 	"license": "MIT",
 	"description": "QT PROXY Server/Client",
 	"scripts": {

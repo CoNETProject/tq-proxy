@@ -1,0 +1,5 @@
+[{
+    "gateWayPort": "8000",
+    "gateWayIpAddress":"127.0.0.1",
+    "randomPassword":"password"
+}]

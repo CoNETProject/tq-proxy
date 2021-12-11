@@ -23,6 +23,7 @@ import * as Compress from './compress'
 import { writeFile } from 'fs'
 import { logger, hexDebug } from './log'
 import colors from 'colors/safe'
+import { request } from 'https'
 const MaxAllowedTimeOut = 1000 * 60 * 60
 const blockHostFIleName = './blockHost.json'
 
@@ -45,6 +46,19 @@ const otherRespon = ( body: string| Buffer, _status: number ) => {
 const return404 = () => {
 	const kkk = '<html>\r\n<head><title>404 Not Found</title></head>\r\n<body bgcolor="white">\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx/1.6.2</center>\r\n</body>\r\n</html>\r\n'
 	return otherRespon ( Buffer.from ( kkk ), 404 )
+}
+
+const jsonResponse = ( body: string ) => {
+	const headers = `Server: nginx/1.6.2\r\n`
+		+ `Date: ${ new Date ().toUTCString()}\r\n`
+		+ `Content-Type: application/json; charset=utf-8\r\n`
+		+ `Content-Length: ${ body.length }\r\n`
+		+ `Connection: keep-alive\r\n`
+		+ `Vary: Accept-Encoding\r\n`
+		//+ `Transfer-Encoding: chunked\r\n`
+		+ '\r\n'
+	const status = 'HTTP/1.1 200 OK\r\n'
+	return status + headers + body
 }
 
 const returnHome = () => {
@@ -167,7 +181,6 @@ class FirstConnect extends Writable {
 						hexDebug(buffer)
 					}
 					
-
 					this.socket.write ( buffer )
 					return cb ()
 				})
@@ -189,6 +202,7 @@ class FirstConnect extends Writable {
 					// 	}
 					// })
 				})
+
 				return
 			}
 
@@ -314,6 +328,11 @@ class preProcessData {
 				return this.closeWithHome ()
 			}
 
+			if ( /^POST$/.test(command[0]) && command[1] ===`/${ password }`) {
+				this.socket.end (jsonResponse (JSON.stringify({passwd:password})))
+				return  this.socket.destroy()
+			}
+
 			if (command[1].length < 80 ) {
 				return this.closeWith404()
 			}
@@ -325,7 +344,8 @@ class preProcessData {
 }
 
 export class ssModeV3 {
-	private blockList
+	private tq_running = false
+	private blockList = []
 	private printConnects () {
 		return this.serverNet.getConnections((err, count)=> {
 			return logger (colors.blue (`Connections [${ count }]`))
@@ -340,7 +360,7 @@ export class ssModeV3 {
 		})
 
 		this.serverNet.listen ( this.port, null, 16384, () => {
-			return logger (colors.blue(`\n**************************************************\nGateway server start listen at port [${ this.port }] DEBUG [${ this.debug }]\n**************************************************`))
+			return logger (colors.blue(`\n**************************************************\nGateway server start listen at port [${ this.port }] password[${ this.password }] DEBUG [${ this.debug }]\n**************************************************`))
 		})
 
 		this.serverNet.once ('error', err => {
@@ -353,8 +373,54 @@ export class ssModeV3 {
 		})
 	}
 
-	constructor ( private port: number, private password, public debug: boolean = false ) {
+	private tq_request () {
+
+		if (this.tq_running) {
+			return logger(`tq_request already running!`)
+		}
+		this.tq_running = true
+		const repert = () => {
+			if (!this.tq_running) {
+				return logger (`tq_request repert setTimeout already running!`)
+			}
+			this.tq_running = false
+
+			setTimeout (() => {
+				this.tq_request ()
+			}, 1000 * 60 * 5)
+		}
+		const options = {
+			hostname: 'tq-proxy.13b995b1f.ca',
+			port: 443,
+			path: '/',
+			method: 'POST'
+		}
+
+		const req = request(options, (res) => {
+			let data = ''
+
+			res.on ('data', d => {
+				data += d
+			})
+			res.once ('end', () => {
+				logger (`tq_request success!`)
+				return repert()
+			})
+		})
+
+		req.once('error', (e) => {
+			logger(`tq_request request on error`, e.message )
+			return repert()
+		})
+
+		return req.end()
+	}
+
+	constructor ( private port: number, private password, public debug: boolean = false, tq: boolean ) {
 		this.makeNewServer ()
+		if ( tq) {
+			this.tq_request ()
+		}
 		try {
 			this.blockList = require (blockHostFIleName)
 		} catch ( ex ) {

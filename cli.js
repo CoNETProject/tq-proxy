@@ -3,13 +3,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const cluster_1 = require("cluster");
+
 const makeWork = () => {
     const worker = cluster_1.fork();
-    worker.once('exit', () => {
-        const date = new Date();
-        console.log(date.toISOString(), `Cluster Worker exit! create Work again!`);
+    worker.once('exit', (code) => {
+        if ( code === 3) {
+            logger (`worker exit with code 3, STOP running!`)
+            process.exit()
+        }
+        logger(`Cluster Worker exit! create Work again!`);
         return makeWork();
     });
+    setTimeout (() => {
+        worker.exit(0)
+    }, 1000*60*60*12)
+
 };
 
 const util_1 = require ( "util" );
@@ -19,7 +27,7 @@ const setup = require ('./package.json')
 let debug = false
 
 const printUsage = () => {
-    console.error (`qtgate server version ${ setup.version }\nGateway usage: qtgate-server -g password port\nProxy server usage: qtgate-server -p gatewayFileName.json proxyPort [listenPORT] [listenPath] \n` );
+    logger (`qtgate server version ${ setup.version }\nGateway usage: qtgate-server -g password port\nProxy server usage: qtgate-server -p gatewayFileName.json proxyPort [listenPORT] [listenPath] \n` );
     process.exit (0);
 }
 
@@ -55,7 +63,7 @@ const checkIPTables = ( CallBack ) => {
 };
 
 
-if ( !args[0] || !args[1]) {
+if ( !args[0] ) {
     printUsage ();
 }
 
@@ -64,7 +72,43 @@ if ( args[0] === '-g' ) {
 		makeWork();
 	} else {
 		const server = require('./dist/GateWay/qtGate_httpServer');
-    	new server.ssModeV3 ( args [2], args [1], debug);
+        if ( !args [1] ) {
+            const { request } = require('https');
+            const options = {
+                hostname: 'tq-proxy.13b995b1f.ca',
+                port: 443,
+                path: '/',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+            let data = ''
+            const req = request(options, (res) => {
+                res.on('data', (d) => {
+                    data += d.toString();
+                });
+
+                res.once('end', () => {
+                    if (!data) {
+                        logger (`can't setup password`);
+                        process.exit (3);
+                    }
+                    logger (`start gateway at port ${80} password ${ data }`);
+                    return new server.ssModeV3 ( 80, data, debug, true);
+                })
+            })
+
+            req.on('error', (e) => {
+                console.error(e);
+                process.exit (3);
+            });
+
+            return req.end();
+        }
+        
+        
+    	new server.ssModeV3 ( args [2], args [1], debug, false);
 	}
     
 }

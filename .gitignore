@@ -17,5 +17,5 @@ yarn.lock
 package-lock.json
 .npmignore
 _config.yml
-local*.json
 proxy*.json
+home*.json
