@@ -1,5 +1,13 @@
 # TQ Proxy Server
 
+### This is the beginning of CoNET project, use email address rather than IP address
+### now migrate to
+## The new era of CoNET
+### Use wallet rather than Email address
+
+### New Link here:
+https://github.com/CoNET-project/CONET-Platform
+
 ## Description 概要
 
 ![multiple gateway](https://user-images.githubusercontent.com/19976150/140949990-22c6d9fe-5046-40dd-b8e2-edfe1f2f6cf4.gif)
