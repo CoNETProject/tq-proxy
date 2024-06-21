@@ -1,9 +1,8 @@
 # TQ Proxy Server
 
-### This is the beginning of CoNET project, use email address rather than IP address
+### This is the beginning of CoNET project
 ### now migrate to
 ## The new era of CoNET
-### Use wallet rather than Email address
 
 ### New Link here:
 https://github.com/CoNET-project/CONET-Platform
